@@ -19,6 +19,7 @@ LOG_FILE = "Controller.log"
 # Timestamp
 # Register Request <Switch-ID>
 
+
 def register_request_received(switch_id):
     log = []
     log.append(str(datetime.time(datetime.now())) + "\n")
@@ -30,24 +31,25 @@ def register_request_received(switch_id):
 # Timestamp
 # Register Response <Switch-ID>
 
+
 def register_response_sent(switch_id):
     log = []
     log.append(str(datetime.time(datetime.now())) + "\n")
     log.append(f"Register Response {switch_id}\n")
-    write_to_log(log) 
+    write_to_log(log)
 
-# For the parameter "routing_table", it should be a list of lists in the form of [[...], [...], ...]. 
+# For the parameter "routing_table", it should be a list of lists in the form of [[...], [...], ...].
 # Within each list in the outermost list, the first element is <Switch ID>. The second is <Dest ID>, and the third is <Next Hop>, and the fourth is <Shortest distance>
 # "Routing Update" Format is below:
 #
 # Timestamp
-# Routing Update 
+# Routing Update
 # <Switch ID>,<Dest ID>:<Next Hop>,<Shortest distance>
 # ...
 # ...
 # Routing Complete
 #
-# You should also include all of the Self routes in your routing_table argument -- e.g.,  Switch (ID = 4) should include the following entry: 		
+# You should also include all of the Self routes in your routing_table argument -- e.g.,  Switch (ID = 4) should include the following entry:
 # 4,4:4,0
 # 0 indicates ‘zero‘ distance
 #
@@ -55,9 +57,10 @@ def register_response_sent(switch_id):
 #  E.g, If switch=4 cannot reach switch=5, the following should be printed
 #  4,5:-1,9999
 #
-# For any switch that has been killed, do not include the routes that are going out from that switch. 
-# One example can be found in the sample log in starter code. 
+# For any switch that has been killed, do not include the routes that are going out from that switch.
+# One example can be found in the sample log in starter code.
 # After switch 1 is killed, the routing update from the controller does not have routes from switch 1 to other switches.
+
 
 def routing_table_update(routing_table):
     log = []
@@ -73,33 +76,37 @@ def routing_table_update(routing_table):
 #  Timestamp
 #  Link Dead <Switch ID 1>,<Switch ID 2>
 
+
 def topology_update_link_dead(switch_id_1, switch_id_2):
     log = []
     log.append(str(datetime.time(datetime.now())) + "\n")
     log.append(f"Link Dead {switch_id_1},{switch_id_2}\n")
-    write_to_log(log) 
+    write_to_log(log)
 
 # "Topology Update: Switch Dead" Format is below:
 #
 #  Timestamp
 #  Switch Dead <Switch ID>
 
+
 def topology_update_switch_dead(switch_id):
     log = []
     log.append(str(datetime.time(datetime.now())) + "\n")
     log.append(f"Switch Dead {switch_id}\n")
-    write_to_log(log) 
+    write_to_log(log)
 
 # "Topology Update: Switch Alive" Format is below:
 #
 #  Timestamp
 #  Switch Alive <Switch ID>
 
+
 def topology_update_switch_alive(switch_id):
     log = []
     log.append(str(datetime.time(datetime.now())) + "\n")
     log.append(f"Switch Alive {switch_id}\n")
-    write_to_log(log) 
+    write_to_log(log)
+
 
 def write_to_log(log):
     with open(LOG_FILE, 'a+') as log_file:
@@ -107,14 +114,30 @@ def write_to_log(log):
         # Write to log
         log_file.writelines(log)
 
+
 def main():
-    #Check for number of arguments and exit if host/port not provided
+    # Check for number of arguments and exit if host/port not provided
     num_args = len(sys.argv)
     if num_args < 3:
-        print ("Usage: python controller.py <port> <config file>\n")
+        print("Usage: python controller.py <port> <config file>\n")
         sys.exit(1)
-    
+
     # Write your code below or elsewhere in this file
+
+    port = sys.argv[1]
+    num_links = 0
+    links = []
+    # Parse the config file
+    with open(sys.argv[2], 'r') as config_file:
+        config = config_file.readlines()
+        num_links = int(config[0].strip())
+        for i in range(1, num_links + 1):
+            links.append(config[i].strip().split())
+
+    print("port: ", port)
+    print("num_links: ", num_links)
+    print("links: ", links)
+
 
 if __name__ == "__main__":
     main()
