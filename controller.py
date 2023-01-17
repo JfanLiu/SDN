@@ -144,23 +144,51 @@ def main():
 
     ctrl_socket.bind(ctrl_addr)
 
+    # Loop for waiting for all switches to register
+    # Once all switches have registered, send register_response to all switches
+
+    switch_addrs = {}
+    switch_count = 0
+
     while True:
         msg, switch_addr = ctrl_socket.recvfrom(1024)
         msg = msg.decode()
         print("msg: ", msg)
 
-        def udp_register_response_sent(switch_id):   
-            msg = "register_response " + switch_id
-            ctrl_socket.sendto(msg.encode(), switch_addr)
-
         # Parse the message
         msg = msg.split()
         if msg[0] == "register_request":
-            udp_register_response_sent(msg[1])
-            register_request_received(msg[1])
+            req_id = msg[1]
+            switch_addrs[req_id] = switch_addr
+            switch_count += 1
+            register_request_received(req_id)
         else:
             print("Unknown message type")
             sys.exit(1)
+
+        if switch_count == num_links:
+            break
+
+    for switch_id in switch_addrs:
+        msg = "register_response\n"
+        neighbors = []
+        for link in links:
+            if switch_id == link[0]:
+                neighbors.append(link[1])
+            elif switch_id == link[1]:
+                neighbors.append(link[0])
+            else:
+                continue
+        neighbors = list(set(neighbors))
+
+        msg += str(len(neighbors)) + "\n"
+        for neighbor in neighbors:
+            msg += neighbor + " " + str(switch_addrs[neighbor][0]) + " " + str(switch_addrs[neighbor][1]) + "\n"
+        
+        print("msg: \n", msg)
+        ctrl_socket.sendto(msg.encode(), switch_addrs[switch_id])
+        register_response_sent(switch_id)
+
 
 if __name__ == "__main__":
     main()
