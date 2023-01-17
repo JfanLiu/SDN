@@ -128,14 +128,29 @@ def main():
     port = sys.argv[1]
     num_links = 0
     links = []
+    switch_ids = []
     # Parse the config file
     with open(sys.argv[2], 'r') as config_file:
         config = config_file.readlines()
         num_links = int(config[0].strip())
         for i in range(1, num_links + 1):
-            links.append(config[i].strip().split())
+            link = config[i].strip().split()
+            link[0] = int(link[0])
+            link[1] = int(link[1])
+            link[2] = int(link[2])
+            # alive = True
+            link.append(True)
+            links.append(link)
+
+    for link in links:
+        if link[0] not in switch_ids:
+            switch_ids.append(link[0])
+        if link[1] not in switch_ids:
+            switch_ids.append(link[1])
+    switch_ids.sort()
 
     print("port: ", port)
+    print("switch_ids: ", switch_ids)
     print("num_links: ", num_links)
     print("links: ", links)
 
@@ -144,12 +159,11 @@ def main():
 
     ctrl_socket.bind(ctrl_addr)
 
-    # Loop for waiting for all switches to register
-    # Once all switches have registered, send register_response to all switches
-
     switch_addrs = {}
     switch_count = 0
 
+    # Loop for waiting for all switches to register
+    # Once all switches have registered, send register_response to all switches
     while True:
         msg, switch_addr = ctrl_socket.recvfrom(1024)
         msg = msg.decode()
@@ -159,18 +173,17 @@ def main():
         msg = msg.split()
         if msg[0] == "register_request":
             req_id = msg[1]
-            switch_addrs[req_id] = switch_addr
+            switch_addrs[int(req_id)] = switch_addr
             switch_count += 1
             register_request_received(req_id)
         else:
             print("Unknown message type")
             sys.exit(1)
 
-        if switch_count == num_links:
+        if switch_count == len(switch_ids):
             break
 
-    for switch_id in switch_addrs:
-        msg = "register_response\n"
+    def get_neighbors(switch_id):
         neighbors = []
         for link in links:
             if switch_id == link[0]:
@@ -180,14 +193,103 @@ def main():
             else:
                 continue
         neighbors = list(set(neighbors))
+        return neighbors
+
+    def get_links(switch_id):
+        switch_links = []
+        for link in links:
+            if switch_id == link[0]:
+                switch_links.append(link)
+            elif switch_id == link[1]:
+                switch_links.append(link)
+            else:
+                continue
+        return switch_links
+
+    def get_otherside(switch_id, link):
+        if switch_id == link[0]:
+            return link[1]
+        elif switch_id == link[1]:
+            return link[0]
+        else:
+            return None
+
+    for switch_id in switch_addrs:
+        msg = "register_response\n"
+        neighbors = get_neighbors(switch_id)
 
         msg += str(len(neighbors)) + "\n"
         for neighbor in neighbors:
-            msg += neighbor + " " + str(switch_addrs[neighbor][0]) + " " + str(switch_addrs[neighbor][1]) + "\n"
-        
+            msg += str(neighbor) + " " + \
+                str(switch_addrs[neighbor][0]) + " " + \
+                str(switch_addrs[neighbor][1]) + "\n"
+
         print("msg: \n", msg)
         ctrl_socket.sendto(msg.encode(), switch_addrs[switch_id])
         register_response_sent(switch_id)
+
+    # Path computation using Dijkstra's algorithm
+    def compute_path(src):
+        visited = {}
+        unvisited = {}
+
+        for switch_id in switch_ids:
+            if switch_id != src:
+                unvisited[switch_id] = {
+                    "id": switch_id,
+                    "distance": 9999,
+                    "hop": -1
+                }
+            else:
+                unvisited[switch_id] = {
+                    "id": switch_id,
+                    "distance": 0,
+                    "hop": switch_id
+                }
+        # Loop for finding the shortest path
+        while len(unvisited) > 0:
+            current_id = list(unvisited.keys())[0]
+            for switch_id in unvisited:
+                if unvisited[switch_id]["distance"] < unvisited[current_id]["distance"]:
+                    current_id = switch_id
+
+            current = unvisited.pop(current_id)
+            neighbor_links = get_links(current["id"])
+
+            for link in neighbor_links:
+                next = get_otherside(current_id, link)
+                if visited.get(next) is not None:
+                    continue
+                new_distance = current["distance"] + link[2]
+                if new_distance < unvisited[next]["distance"]:
+                    unvisited[next]["distance"] = new_distance
+                    unvisited[next]["hop"] = current_id
+
+            visited[current_id] = current
+            if len(unvisited) == 0:
+                break
+        return visited
+
+    routing_table = []
+    for switch_id in switch_ids:
+        path = compute_path(switch_id)
+        for s_id in switch_ids:
+            routing_table.append(
+                [switch_id, s_id, path[s_id]["hop"], path[s_id]["distance"]])
+
+    print("routing_table: ", routing_table)
+
+    routing_table_update(routing_table)
+
+    # Sending routing table to all switches
+    for switch_id in switch_ids:
+        msg = "routing_table_update\n"
+        msg += str(len(routing_table)) + "\n"
+        for entry in routing_table:
+            msg += str(entry[0]) + " " + str(entry[1]) + " " + \
+                str(entry[2]) + " " + str(entry[3]) + "\n"
+
+        ctrl_socket.sendto(msg.encode(), switch_addrs[switch_id])
 
 
 if __name__ == "__main__":

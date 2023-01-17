@@ -22,3 +22,333 @@ Register Request 5
 
 09:05:21.997185
 Register Request 5
+
+
+11:46:03.238685
+Register Request 0
+
+
+11:46:25.685337
+Register Request 1
+
+
+11:46:36.050592
+Register Request 2
+
+
+11:46:36.050881
+Register Response 0
+
+
+11:46:36.051025
+Register Response 1
+
+
+11:46:36.051149
+Register Response 2
+
+
+12:24:52.233195
+Register Request 0
+
+
+12:24:54.831761
+Register Request 1
+
+
+12:24:58.533007
+Register Request 2
+
+
+12:24:58.533519
+Register Response 0
+
+
+12:24:58.533929
+Register Response 1
+
+
+12:24:58.534238
+Register Response 2
+
+
+12:25:58.384514
+Register Request 0
+
+
+12:26:00.539150
+Register Request 1
+
+
+12:26:02.761205
+Register Request 2
+
+
+12:30:54.225508
+Register Request 0
+
+
+12:30:57.569958
+Register Request 1
+
+
+12:30:59.927588
+Register Request 2
+
+
+12:31:29.965199
+Register Request 0
+
+
+12:31:32.448052
+Register Request 1
+
+
+12:31:34.815282
+Register Request 2
+
+
+12:36:56.052775
+Register Request 0
+
+
+12:36:58.703497
+Register Request 1
+
+
+12:37:01.949152
+Register Request 2
+
+
+12:37:01.950496
+Register Response 0
+
+
+12:37:01.951107
+Register Response 1
+
+
+12:37:01.951957
+Register Response 2
+
+
+12:39:16.968752
+Register Request 0
+
+
+12:39:19.343358
+Register Request 1
+
+
+12:39:21.560999
+Register Request 2
+
+
+12:39:21.561922
+Register Response 0
+
+
+12:39:21.562463
+Register Response 1
+
+
+12:39:21.563089
+Register Response 2
+
+
+12:42:19.140445
+Register Request 0
+
+
+12:42:21.578318
+Register Request 1
+
+
+12:42:23.936614
+Register Request 2
+
+
+12:42:23.937282
+Register Response 0
+
+
+12:42:23.937575
+Register Response 1
+
+
+12:42:23.937940
+Register Response 2
+
+
+12:43:32.282443
+Register Request 0
+
+
+12:43:37.810509
+Register Request 1
+
+
+12:43:40.471881
+Register Request 2
+
+
+12:43:40.472743
+Register Response 0
+
+
+12:43:40.473214
+Register Response 1
+
+
+12:43:40.473785
+Register Response 2
+
+
+12:45:32.679978
+Register Request 0
+
+
+12:45:34.901848
+Register Request 1
+
+
+12:45:37.137018
+Register Request 2
+
+
+12:45:37.137965
+Register Response 0
+
+
+12:45:37.138513
+Register Response 1
+
+
+12:45:37.138971
+Register Response 2
+
+
+12:46:09.909367
+Register Request 0
+
+
+12:46:12.150063
+Register Request 1
+
+
+12:46:14.123370
+Register Request 2
+
+
+12:46:14.124974
+Register Response 0
+
+
+12:46:14.125532
+Register Response 1
+
+
+12:46:14.126038
+Register Response 2
+
+
+12:49:22.746003
+Routing Update
+0,0:0,0
+0,1:0,20
+0,2:0,10
+1,0:1,20
+1,1:1,0
+1,2:1,30
+2,0:2,10
+2,1:2,30
+2,2:2,0
+Routing Complete
+
+
+12:50:04.776035
+Register Request 0
+
+
+12:50:07.148072
+Register Request 1
+
+
+12:50:09.357564
+Register Request 2
+
+
+12:50:09.358628
+Register Response 0
+
+
+12:50:09.359138
+Register Response 1
+
+
+12:50:09.359710
+Register Response 2
+
+
+12:51:28.876028
+Routing Update
+0,0:0,0
+0,1:0,20
+0,2:0,10
+1,0:1,20
+1,1:1,0
+1,2:1,30
+2,0:2,10
+2,1:2,30
+2,2:2,0
+Routing Complete
+
+
+12:52:46.482481
+Register Request 0
+
+
+12:52:48.586659
+Register Request 1
+
+
+12:52:50.516111
+Register Request 2
+
+
+12:53:25.382193
+Register Request 0
+
+
+12:53:28.227806
+Register Request 1
+
+
+12:53:30.827566
+Register Request 2
+
+
+12:53:30.828221
+Register Response 0
+
+
+12:53:30.828706
+Register Response 1
+
+
+12:53:30.829258
+Register Response 2
+
+
+12:53:40.644517
+Routing Update
+0,0:0,0
+0,1:0,20
+0,2:0,10
+1,0:1,20
+1,1:1,0
+1,2:1,30
+2,0:2,10
+2,1:2,30
+2,2:2,0
+Routing Complete
