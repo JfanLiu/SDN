@@ -8,6 +8,7 @@ Last Modified Date: December 9th, 2021
 
 import sys
 from datetime import date, datetime
+import socket
 
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 LOG_FILE = "Controller.log"
@@ -138,6 +139,28 @@ def main():
     print("num_links: ", num_links)
     print("links: ", links)
 
+    ctrl_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ctrl_addr = ('', int(port))
+
+    ctrl_socket.bind(ctrl_addr)
+
+    while True:
+        msg, switch_addr = ctrl_socket.recvfrom(1024)
+        msg = msg.decode()
+        print("msg: ", msg)
+
+        def udp_register_response_sent(switch_id):   
+            msg = "register_response " + switch_id
+            ctrl_socket.sendto(msg.encode(), switch_addr)
+
+        # Parse the message
+        msg = msg.split()
+        if msg[0] == "register_request":
+            udp_register_response_sent(msg[1])
+            register_request_received(msg[1])
+        else:
+            print("Unknown message type")
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
