@@ -8,6 +8,7 @@ Last Modified Date: December 9th, 2021
 
 import sys
 from datetime import date, datetime
+import socket
 
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 # The log file for switches are switch#.log, where # is the id of that switch (i.e. switch0.log, switch1.log). The code for replacing # with a real number has been given to you in the main function.
@@ -112,16 +113,36 @@ def main():
     # Write your code below or elsewhere in this file
     ctrl_hostname = sys.argv[2]
     ctrl_port = int(sys.argv[3])
-    
+
     # Support multiple -f arguments
     f_neighbors = []
     for i in range(4, num_args):
         if sys.argv[i] == '-f':
             f_neighbors.append(int(sys.argv[i+1]))
-    
+
     print("controller hostname: ", ctrl_hostname)
     print("controller port: ", ctrl_port)
     print("f_neighbors: ", f_neighbors)
+
+    switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    my_addr = ('', my_id)
+    ctrl_addr = (ctrl_hostname, ctrl_port)
+    switch_socket.connect(ctrl_addr)
+
+    # switch_socket.bind(my_addr)
+
+    def udp_register_request_sent():
+        msg = "register_request "+str(my_id)
+        switch_socket.sendall(msg.encode())
+        register_request_sent()
+
+    def udp_register_response_received():
+        msg, _ = switch_socket.recvfrom(1024)
+        print(msg.decode())
+        register_response_received()
+
+    udp_register_request_sent()
+    udp_register_response_received()
 
 
 if __name__ == "__main__":
