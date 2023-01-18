@@ -94,3 +94,233 @@ Register Request Sent
 
 12:53:30.828843
 Register Response received
+
+
+22:20:49.361736
+Register Request Sent
+
+
+22:20:56.494227
+Register Response received
+
+
+13:20:06.514096
+Register Request Sent
+
+
+13:20:09.725255
+Register Response received
+
+
+13:27:27.412577
+Register Request Sent
+
+
+13:27:30.302955
+Register Response received
+
+
+13:53:49.081283
+Register Request Sent
+
+
+13:59:34.473388
+Register Request Sent
+
+
+14:03:02.659704
+Register Request Sent
+
+
+14:04:00.478622
+Register Request Sent
+
+
+14:04:49.070019
+Register Request Sent
+
+
+14:05:37.967460
+Register Request Sent
+
+
+14:07:18.606429
+Register Request Sent
+
+
+14:07:51.880066
+Register Request Sent
+
+
+14:08:56.133136
+Register Request Sent
+
+
+14:08:59.420679
+Register Response received
+
+
+14:10:12.101559
+Register Request Sent
+
+
+14:10:12.934925
+Register Response received
+
+
+14:10:12.961928
+Routing Update
+1,0:-1
+1,2:-1
+Routing Complete
+
+
+14:13:06.760560
+Register Request Sent
+
+
+14:13:08.505992
+Register Response received
+
+
+14:13:08.529857
+Routing Update
+1,0:-1
+1,2:-1
+Routing Complete
+
+
+14:21:12.938868
+Register Request Sent
+
+
+14:21:15.931762
+Register Response received
+
+
+14:21:28.414255
+Register Request Sent
+
+
+14:21:29.744732
+Register Response received
+
+
+14:21:52.027892
+Register Request Sent
+
+
+14:21:53.662893
+Register Response received
+
+
+14:21:53.689894
+Routing Update
+1,0:-1
+1,2:-1
+1,1:1
+Routing Complete
+
+
+14:22:52.182883
+Register Request Sent
+
+
+14:22:57.303414
+Register Response received
+
+
+14:22:57.324410
+Routing Update
+1,0:-1
+1,2:-1
+1,1:1
+Routing Complete
+
+
+14:22:57.496409
+Register Request Sent
+
+
+14:24:17.598128
+Register Request Sent
+
+
+14:25:45.604990
+Register Request Sent
+
+
+14:25:48.646865
+Register Response received
+
+
+14:25:48.669867
+Routing Update
+1,0:-1
+1,2:-1
+1,1:1
+Routing Complete
+
+
+14:26:55.627323
+Register Request Sent
+
+
+14:26:56.320323
+Register Response received
+
+
+14:26:56.347323
+Routing Update
+1,0:-1
+1,2:-1
+1,1:1
+Routing Complete
+
+
+14:27:28.548517
+Register Request Sent
+
+
+14:27:29.962617
+Register Response received
+
+
+14:27:29.989618
+Routing Update
+1,0:0
+1,2:2
+1,1:1
+Routing Complete
+
+
+14:27:54.355716
+Register Request Sent
+
+
+14:27:55.182812
+Register Response received
+
+
+14:27:55.213812
+Routing Update
+1,0:0
+1,2:2
+1,1:1
+Routing Complete
+
+
+14:30:43.667969
+Register Request Sent
+
+
+14:30:44.711563
+Register Response received
+
+
+14:30:44.739564
+Routing Update
+1,0:0
+1,1:1
+1,2:2
+Routing Complete
