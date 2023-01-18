@@ -320,7 +320,26 @@ def main():
             if len(unvisited) == 0:
                 break
 
-        return visited
+        # next_hop此时记录的是链路上的倒数第2个结点，需要回溯，使其记录链路上的第2个结点
+        visited_temp = visited
+
+        for end_id in visited:
+
+            if end_id == src:  # 结点本身是链路上第1个结点
+                continue  # 初始化时处理过了
+            elif visited[end_id]["hop"] == -1:
+                continue  # 始终不可达则不回溯
+
+            while True:  # 循环回溯
+                last = visited_temp[end_id]["hop"]
+                if last == src:  # 结点本身是链路上第2个结点
+                    visited_temp[end_id]["hop"] = end_id
+                    break
+                if visited[last]["hop"] == src:  # 结点本身是链路上第3个结点
+                    break
+                visited_temp[end_id]["hop"] = visited[last]["hop"]
+
+        return visited_temp
 
     def udp_routing_table_update(switch_ids, links):
         routing_table = []
@@ -387,11 +406,13 @@ def main():
                 elif link[0] == l[1] and link[1] == l[0]:
                     return True
             return False
+
         def node_alive(link):
             if info_dist["keep_alive"][link[0]] and info_dist["keep_alive"][link[1]]:
                 return True
             else:
                 return False
+
         def get_distance(link):
             for link in links:
                 if link[0] == link[0] and link[1] == link[1]:
@@ -452,7 +473,7 @@ def main():
                     switch_addrs[req_id] = addr
                     # Topology changed
                     create_thread(udp_topologychange_detected, [])
-            
+
             info_dist_lock.release()
 
     create_thread(udp_topologyupdate_timeout, [])
