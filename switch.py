@@ -245,6 +245,8 @@ def main():
         for id in info_dist["neighbors"]:
             if info_dist["neighbors"][id]["alive"] == 0:
                 continue
+            if id in f_neighbors:
+                continue
             msg = Message()
             msg.set_type("keep_alive")
             msg.add_object(my_id)
@@ -261,6 +263,8 @@ def main():
         msg.add_object(my_id)
 
         for id in info_dist["neighbors"]:
+            if id in f_neighbors:
+                continue
             reachable = info_dist["neighbors"][id]["alive"]
             msg.add_object([id, reachable])
 
@@ -277,6 +281,8 @@ def main():
     def udp_keepalive_timeout():
         info_dist_lock.acquire()
         for id in neighbors:
+            if id in f_neighbors:
+                continue
             if info_dist["neighbors"][id]["alive"]:
                 if info_dist["keep_alive"][id]:
                     info_dist["keep_alive"][id] = 0
