@@ -9,6 +9,7 @@ Last Modified Date: December 9th, 2021
 import sys
 from datetime import date, datetime
 import socket
+import threading
 
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 LOG_FILE = "Controller.log"
@@ -124,6 +125,58 @@ def main():
         sys.exit(1)
 
     # Write your code below or elsewhere in this file
+    class Message:
+        def __init__(self):
+            self.type = 'unknown'
+            self.objs = []
+
+        def set_type(self, type: str):
+            self.type = type
+
+        def add_object(self, obj):
+            self.objs.append(obj)
+
+        def get_type(self):
+            return self.type
+
+        def get_objects(self):
+            return self.objs
+
+        def from_str(self, text: str):
+            lines = text.strip().splitlines()
+            self.type = lines[0]
+            for line in lines[1:]:
+                if line == "":
+                    continue
+                arr = line.strip().split()
+                items = []
+                for item in arr:
+                    if item.isdigit():
+                        items.append(int(item))
+                    elif type(item) is bool:
+                        items.append(int(item))
+                    else:
+                        items.append(item)
+                self.objs.append(items)
+            return self
+
+        def __str__(self) -> str:
+            text = self.type+"\n"
+            for obj in self.objs:
+                if type(obj) is list:
+                    str_obj = [str(item) for item in obj]
+                    text += " ".join(str_obj)
+                else:
+                    text += str(obj)
+                text += "\n"
+            return text
+
+        def __bytes__(self) -> bytes:
+            return self.__str__().encode()
+
+        def print(self):
+            print("msg:")
+            print(self.__str__())
 
     port = sys.argv[1]
     num_links = 0
@@ -135,11 +188,9 @@ def main():
         num_links = int(config[0].strip())
         for i in range(1, num_links + 1):
             link = config[i].strip().split()
-            link[0] = int(link[0])
-            link[1] = int(link[1])
-            link[2] = int(link[2])
-            # alive = True
             link.append(True)
+            link = [int(i) for i in link]
+            # alive = True
             links.append(link)
 
     for link in links:
@@ -166,13 +217,12 @@ def main():
     # Once all switches have registered, send register_response to all switches
     while True:
         msg, switch_addr = ctrl_socket.recvfrom(1024)
-        msg = msg.decode()
-        print("msg: ", msg)
+        msg = Message().from_str(msg.decode())
+        msg.print()
 
         # Parse the message
-        msg = msg.split()
-        if msg[0] == "register_request":
-            req_id = msg[1]
+        if msg.get_type() == "register_request":
+            req_id = msg.get_objects()[0][0]
             switch_addrs[int(req_id)] = switch_addr
             switch_count += 1
             register_request_received(req_id)
@@ -195,7 +245,7 @@ def main():
         neighbors = list(set(neighbors))
         return neighbors
 
-    def get_links(switch_id):
+    def get_links(switch_id, links):
         switch_links = []
         for link in links:
             if switch_id == link[0]:
@@ -214,22 +264,23 @@ def main():
         else:
             return None
 
-    for switch_id in switch_addrs:
-        msg = "register_response\n"
+    def udp_register_response_sent(switch_id):
+        msg = Message()
+        msg.set_type("register_response")
         neighbors = get_neighbors(switch_id)
 
-        msg += str(len(neighbors)) + "\n"
         for neighbor in neighbors:
-            msg += str(neighbor) + " " + \
-                str(switch_addrs[neighbor][0]) + " " + \
-                str(switch_addrs[neighbor][1]) + "\n"
+            msg.add_object([neighbor, switch_addrs[neighbor]
+                            [0], switch_addrs[neighbor][1]])
 
-        print("msg: \n", msg)
-        ctrl_socket.sendto(msg.encode(), switch_addrs[switch_id])
+        ctrl_socket.sendto(bytes(msg), switch_addrs[switch_id])
         register_response_sent(switch_id)
 
+    for switch_id in switch_addrs:
+        udp_register_response_sent(switch_id)
+
     # Path computation using Dijkstra's algorithm
-    def compute_path(src):
+    def compute_path(src, switch_ids, links):
         visited = {}
         unvisited = {}
 
@@ -254,7 +305,7 @@ def main():
                     current_id = switch_id
 
             current = unvisited.pop(current_id)
-            neighbor_links = get_links(current["id"])
+            neighbor_links = get_links(current["id"], links)
 
             for link in neighbor_links:
                 next = get_otherside(current_id, link)
@@ -268,28 +319,144 @@ def main():
             visited[current_id] = current
             if len(unvisited) == 0:
                 break
+
         return visited
 
-    routing_table = []
-    for switch_id in switch_ids:
-        path = compute_path(switch_id)
-        for s_id in switch_ids:
-            routing_table.append(
-                [switch_id, s_id, path[s_id]["hop"], path[s_id]["distance"]])
+    def udp_routing_table_update(switch_ids, links):
+        routing_table = []
+        for switch_id in switch_ids:
+            path = compute_path(switch_id, switch_ids, links)
+            for next_id in switch_ids:
+                routing_table.append(
+                    [switch_id, next_id, path[next_id]["hop"], path[next_id]["distance"]])
 
-    print("routing_table: ", routing_table)
+        routing_table_update(routing_table)
 
-    routing_table_update(routing_table)
+        # Sending routing table to all switches
+        for switch_id in switch_ids:
+            msg = Message()
+            msg.set_type("routing_table_update")
+            for entry in routing_table:
+                msg.add_object(entry)
 
-    # Sending routing table to all switches
-    for switch_id in switch_ids:
-        msg = "routing_table_update\n"
-        msg += str(len(routing_table)) + "\n"
-        for entry in routing_table:
-            msg += str(entry[0]) + " " + str(entry[1]) + " " + \
-                str(entry[2]) + " " + str(entry[3]) + "\n"
+            ctrl_socket.sendto(bytes(msg), switch_addrs[switch_id])
 
-        ctrl_socket.sendto(msg.encode(), switch_addrs[switch_id])
+    udp_routing_table_update(switch_ids, links)
+
+    K = 2
+    TIMEOUT = 3*K
+
+    def create_timer(func, args, interval):
+        timer = threading.Timer(interval, func, args)
+        timer.start()
+        return timer
+
+    def create_thread(func, args):
+        thread = threading.Thread(target=func, args=args)
+        thread.start()
+        return thread
+
+    info_dist = {}
+    info_dist["topology_update"] = {}
+    info_dist["keep_alive"] = {}
+    info_dist["link"] = {}
+    for id in switch_ids:
+        info_dist["topology_update"][id] = 1
+        info_dist["keep_alive"][id] = 1
+    for link in links:
+        if info_dist["link"].get(link[0]) is None:
+            info_dist["link"][link[0]] = {}
+        if info_dist["link"].get(link[1]) is None:
+            info_dist["link"][link[1]] = {}
+        info_dist["link"][int(link[0])][int(link[1])] = 1
+        info_dist["link"][int(link[1])][int(link[0])] = 1
+    info_dist_lock = threading.Lock()
+    # Lock for other resources
+    origin_lock = threading.Lock()
+
+    def udp_topologychange_detected():
+        origin_lock.acquire()
+        info_dist_lock.acquire()
+
+        new_links = []
+
+        def exist_link(link):
+            for l in new_links:
+                if link[0] == l[0] and link[1] == l[1]:
+                    return True
+                elif link[0] == l[1] and link[1] == l[0]:
+                    return True
+            return False
+        def node_alive(link):
+            if info_dist["keep_alive"][link[0]] and info_dist["keep_alive"][link[1]]:
+                return True
+            else:
+                return False
+        def get_distance(link):
+            for link in links:
+                if link[0] == link[0] and link[1] == link[1]:
+                    return link[2]
+                elif link[0] == link[1] and link[1] == link[0]:
+                    return link[2]
+            return 9999
+
+        for n1 in info_dist["link"]:
+            for n2 in info_dist["link"][n1]:
+                if info_dist["link"][n1][n2] == 1:
+                    if not exist_link([n1, n2]):
+                        if node_alive([n1, n2]):
+                            new_links.append([n1, n2, get_distance([n1, n2])])
+
+        udp_routing_table_update(switch_ids, new_links)
+
+        info_dist_lock.release()
+        origin_lock.release()
+
+    def udp_topologyupdate_timeout():
+        info_dist_lock.acquire()
+        for id in info_dist["keep_alive"]:
+            if info_dist["topology_update"][id]:
+                info_dist["topology_update"][id] = 0
+            else:
+                info_dist["keep_alive"][id] = 0
+                # Topology changed
+                create_thread(udp_topologychange_detected, [])
+        info_dist_lock.release()
+
+        create_timer(udp_topologyupdate_timeout, [], TIMEOUT)
+
+    def udp_message_received():
+        while True:
+            msg, addr = ctrl_socket.recvfrom(1024)
+            msg = Message().from_str(msg.decode())
+            msg.print()
+            info_dist_lock.acquire()
+
+            if msg.get_type() == "topology_update":
+                switch_id = msg.get_objects()[0][0]
+                info_dist["topology_update"][switch_id] = 1
+
+                for [id, reachable] in msg.get_objects()[1:]:
+                    old_reachable = info_dist["link"][switch_id][id]
+                    if reachable != old_reachable:
+                        info_dist["link"][switch_id][id] = reachable
+                        info_dist["link"][id][switch_id] = reachable
+                        # Topology changed
+                        create_thread(udp_topologychange_detected, [])
+            elif msg.get_type() == "register_request":
+                req_id = msg.get_objects()[0][0]
+
+                if not info_dist["keep_alive"][req_id]:
+                    info_dist["keep_alive"][req_id] = 1
+                    info_dist["topology_update"][req_id] = 1
+                    switch_addrs[req_id] = addr
+                    # Topology changed
+                    create_thread(udp_topologychange_detected, [])
+            
+            info_dist_lock.release()
+
+    create_thread(udp_topologyupdate_timeout, [])
+    udp_message_received()
 
 
 if __name__ == "__main__":
