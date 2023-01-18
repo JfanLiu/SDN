@@ -10,6 +10,7 @@ import sys
 from datetime import date, datetime
 import socket
 import threading
+import operator
 
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 LOG_FILE = "Controller.log"
@@ -116,10 +117,11 @@ def write_to_log(log):
         # Write to log
         log_file.writelines(log)
 
-def prompt(msg,flag):
-  print(flag+" msg:\n"+msg)
-  
-  
+
+def prompt(msg, msg_name):
+    print(msg_name+"\n"+msg)
+
+
 def main():
     # Check for number of arguments and exit if host/port not provided
     num_args = len(sys.argv)
@@ -129,8 +131,10 @@ def main():
 
     port = int(sys.argv[1])
     num_links = 0  # the num of link
-    links = []     # the list of link : start-end-dis. type is all int
     switch_table = {}
+    K = 2  # period
+    Timeout = K*3
+
     # Parse the config file
     with open(sys.argv[2], 'r') as config_file:
         config = config_file.readlines()
@@ -145,13 +149,15 @@ def main():
                 switch_table[start_id] = {
                     "edge": {},
                     "state": True,
-                    "addr": ""
+                    "addr": "",
+                    "refresh": False
                 }
             if end_id not in switch_table:
                 switch_table[end_id] = {
                     "edge": {},
                     "state": True,
-                    "addr": ""
+                    "addr": "",
+                    "refresh": False
                 }
             switch_table[start_id]["edge"][end_id] = {
                 "dis": dis,
@@ -169,7 +175,6 @@ def main():
     print("port: ", port)
     print("switch_table: ", switch_table)
     print("num_links: ", num_links)
-    print("links: ", links)
 
     ctrl_socket = socket.socket(
         socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
@@ -183,7 +188,7 @@ def main():
     while True:
         msg, switch_addr = ctrl_socket.recvfrom(1024)
         msg = msg.decode()
-        prompt(msg,"recv")
+        prompt(msg, "recv")
 
         # Parse the message
         msg = msg.split()
@@ -209,9 +214,12 @@ def main():
             msg += "{0} {1} {2}\n".format(end_id,
                                           switch_table[end_id]["addr"][0],
                                           switch_table[end_id]["addr"][1])
-        prompt(msg,"send")
+        prompt(msg, "send")
         ctrl_socket.sendto(msg.encode(), switch_table[switch_id]["addr"])
         register_response_sent(switch_id)
+
+    # 至此，并发加锁
+    lock = threading.Lock()
 
     # Path computation using Dijkstra's algorithm
     def compute_path(src):
@@ -276,7 +284,9 @@ def main():
         return visited_temp
 
     def udp_routing_table_update_sent():
-        # need data:switch_ids,switch_addrs
+        # 读取table，make 路由表，按序广播，log
+
+        lock.acquire()
 
         # cal the shortest path and make routing_table
         routing_table = []
@@ -288,8 +298,6 @@ def main():
 
         print("routing_table: ", routing_table)
 
-        routing_table_update(routing_table)
-
         # Sending routing table to all switches
         for switch_id in switch_table:
             msg = "routing_table_update\n"
@@ -297,10 +305,101 @@ def main():
             for edge in routing_table:
                 if edge[0] == switch_id:
                     msg += "{0} {1}\n".format(edge[1], edge[2])
-            prompt(msg,"send")
-            ctrl_socket.sendto(msg.encode(), switch_table[switch_id]["addr"])
+            prompt(msg, "send route table")
+            addr=switch_table[switch_id]["addr"]
+            lock.release()
+            ctrl_socket.sendto(msg.encode(),addr)
+            lock.acquire()
+
+        # log
+        routing_table_update(routing_table)
+
+        lock.release()
 
     udp_routing_table_update_sent()
+    
+    import json
+    def pretty(d):
+      print(json.dumps(d, indent=4, ensure_ascii=False))
+
+    def refresh_switch_table(msg=None, id=None, flag=None):
+        lock.acquire()
+        if msg != None:
+            if msg[0] == 'routing_table_update':
+                start_id = int(msg[1])
+
+                switch_table[start_id]["refresh"] = True
+
+                switch_table_temp = switch_table
+
+                for end_id in switch_table[start_id]["edge"]:
+                    switch_table[start_id]["edge"][end_id]["state"] = False
+                
+                for i in range(2, len(msg)):
+                    link = msg[i].split()
+                    if len(link)!=2:
+                      break
+                    end_id = int(link[0])
+                    state = link[1] == True                    
+                    
+                    switch_table[start_id]["edge"][end_id]["state"] = state
+
+                if operator.eq(switch_table, switch_table_temp):
+                    lock.release()
+                    return
+        else:
+            if switch_table[id]["state"] == flag:
+                lock.release()
+                return
+            switch_table[id]["state"] = flag
+
+        lock.release()
+        # table有变，刷新，广播，log
+        udp_routing_table_update_sent()
+
+    def rec_infor():
+        while True:
+            # 接收来自邻居交换机的活信息与来自控制器的路由更新表
+            msg, switch_addr = ctrl_socket.recvfrom(1024)
+            msg = msg.decode()
+            msg_tmep=msg
+            msg = msg.split('\n')
+            # 可以通过发送地址或信息头来确定信息类别
+            if msg[0] == 'routing_table_update':
+                prompt(msg_tmep, "rev route update from "+msg[1])
+                refresh_switch_table(msg)
+            elif msg[0] == "register_request":
+                req_id = int(msg[1])
+                prompt(msg_tmep, "rev register request from "+req_id)
+                refresh_switch_table(None, req_id, True)
+
+    def check_dead():
+
+        lock.acquire()
+
+        # 检测是否所有活邻居都alive刷新了
+        for start_id in switch_table:
+            # 若未刷新，则置死
+            if switch_table[start_id]["state"] == True and switch_table[start_id]["refresh"] != True:
+                lock.release()
+                refresh_switch_table(None, start_id, False)
+                lock.acquire()
+            switch_table[start_id]["refresh"] = False
+
+        lock.release()
+
+    # 定时进程
+    class RepeatingTimer(threading.Timer):
+        def run(self):
+            while not self.finished.is_set():
+                self.function(*self.args, **self.kwargs)
+                self.finished.wait(self.interval)
+
+    t_check_dead = RepeatingTimer(Timeout, check_dead)
+    t_check_dead.start()
+
+    t_rec_infor = threading.Thread(target=rec_infor)
+    t_rec_infor.start()
 
 
 if __name__ == "__main__":
