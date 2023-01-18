@@ -10,7 +10,6 @@ import sys
 from datetime import date, datetime
 import socket
 import threading
-import operator
 
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 # The log file for switches are switch#.log, where # is the id of that switch (i.e. switch0.log, switch1.log). The code for replacing # with a real number has been given to you in the main function.
@@ -98,10 +97,6 @@ def write_to_log(log):
         log_file.writelines(log)
 
 
-def prompt(msg, msg_name):
-    print(msg_name+"\n"+msg)
-
-
 def main():
 
     global LOG_FILE
@@ -113,237 +108,215 @@ def main():
             "switch.py <Id_self> <Controller hostname> <Controller Port> -f <Neighbor ID>\n")
         sys.exit(1)
 
-    #global infor
     my_id = int(sys.argv[1])
+    LOG_FILE = 'switch' + str(my_id) + ".log"
+
+    # Write your code below or elsewhere in this file
     ctrl_hostname = sys.argv[2]
     ctrl_port = int(sys.argv[3])
-    K = 2  # period
-    Timeout = K*3
-
-    edge_table = {}
-
-    LOG_FILE = 'switch' + str(my_id) + ".log"
 
     # Support multiple -f arguments
     f_neighbors = []
-    if num_args == 6:
-        if sys.argv[4] == '-f':
-            f_neighbors.append(int(sys.argv[5]))
+    for i in range(4, num_args):
+        if sys.argv[i] == '-f':
+            f_neighbors.append(int(sys.argv[i+1]))
 
     print("controller hostname: ", ctrl_hostname)
     print("controller port: ", ctrl_port)
     print("f_neighbors: ", f_neighbors)
 
-    switch_socket = socket.socket(
-        socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
-    # switch as client, connect to controller as server
-    host_addr = (ctrl_hostname, ctrl_port)
-    switch_socket.connect(host_addr)
+    my_addr = ('', my_id)
+    ctrl_addr = (ctrl_hostname, ctrl_port)
+    switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    class Message:
+        def __init__(self):
+            self.type = 'unknown'
+            self.objs = []
+
+        def set_type(self, type: str):
+            self.type = type
+
+        def add_object(self, obj):
+            self.objs.append(obj)
+
+        def get_type(self):
+            return self.type
+
+        def get_objects(self):
+            return self.objs
+
+        def from_str(self, text: str):
+            lines = text.strip().splitlines()
+            self.type = lines[0]
+            for line in lines[1:]:
+                if line == "":
+                    continue
+                arr = line.strip().split()
+                items = []
+                for item in arr:
+                    if item.isdigit():
+                        items.append(int(item))
+                    else:
+                        items.append(item)
+                self.objs.append(items)
+            return self
+
+        def __str__(self) -> str:
+            text = self.type+"\n"
+            for obj in self.objs:
+                if type(obj) is list:
+                    str_obj = [str(item) for item in obj]
+                    text += " ".join(str_obj)
+                else:
+                    text += str(obj)
+                text += "\n"
+            return text
+
+        def __bytes__(self) -> bytes:
+            return self.__str__().encode()
+
+        def print(self):
+            print("msg:")
+            print(self.__str__())
 
     def udp_register_request_sent():
-        msg = "register_request "+str(my_id)
-        prompt(msg, "send")
-        switch_socket.sendall(msg.encode())
+        msg = Message()
+        msg.set_type("register_request")
+        msg.add_object(my_id)
+        switch_socket.sendto(bytes(msg), ctrl_addr)
         register_request_sent()
 
-    def udp_register_response_received():
-        # Register Response message
-        # <number-of-neighbors>
-        # <neighboring switch id> <hostname of this switch> <port of this switch>
-        msg, _ = switch_socket.recvfrom(1024)
-        msg = msg.decode()
-        prompt(msg, "recv")
-        # Parse the message
-        msg = msg.split('\n')
-        if msg[0] == "register_response":
-            # 忽略msg[1]number-of-neighbors 不需要
-            for i in range(2, len(msg)):
-                link = msg[i].split()
-                if len(link) != 3:
-                    break
-                end_id = int(link[0])
-                addr1 = link[1]  # hostname
-                addr2 = int(link[2])  # port
+    neighbors = {}
 
-                edge_table[end_id] = {
-                    "state": True,
-                    "next_hop": -1,
-                    "addr": (addr1, addr2),
-                    "refresh": False
-                }
-            # add 自己到自己
-            edge_table[my_id] = {
-                "state": True,
-                "next_hop": my_id,
-                "addr": "",  # 不需要知道自己的地址吧？如果后续报错视为错误
-                "refresh": False
-            }
+    def udp_register_response_received():
+        msg, _ = switch_socket.recvfrom(1024)
+
+        msg = Message().from_str(msg.decode())
+        msg.print()
+
+        if msg.get_type() != "register_response":
+            return
+
+        for obj in msg.get_objects():
+            switch_id = obj[0]
+            switch_addr = (obj[1], obj[2])
+            neighbors[switch_id] = {"id": switch_id,
+                                    "addr": switch_addr, "alive": True}
+
         register_response_received()
 
-    # 发生注册请求
     udp_register_request_sent()
-    # 接收注册请求响应
     udp_register_response_received()
-
-    # 接下来，要处理并发，加锁
-    lock = threading.Lock()
-    lock_k = threading.Lock() #第k秒，接收keep alive的优先级比向ctrl发送table的优先级高
-
-    def make_routing_table_update(edge_table, my_id):
-        # <Switch ID>,<Dest ID>:<Next Hop>
-        # 持锁进程调用此函数
-
-        routing_table = []
-        for end_id in edge_table:
-            routing_table.append([
-                my_id,
-                end_id,
-                edge_table[end_id]["next_hop"]
-            ])
-        routing_table.sort(key=lambda x: (x[0], x[1]))
-        return routing_table
-
-    def send_alive():
-        lock.acquire()
-        # 向活邻居发alive
-        msg = "KEEP_ALIVE\n{0}\n".format(my_id)
-        for end_id in edge_table:
-            if end_id == my_id:
-                continue
-            addr = edge_table[end_id]["addr"]
-            lock.release()
-            switch_socket.sendto(msg.encode(), addr)
-            prompt(msg, "send keep alive to "+str(end_id))
-            lock.acquire()
-        lock.release()
-
-    def send_link():
-      # 向控制器发送自己的邻居死活情况
-        lock_k.acquire()
-        lock.acquire()
-        msg = "routing_table_update\n"
-        msg += str(my_id)+'\n'
-        for end_id in edge_table:
-            if end_id == my_id:
-                continue
-            msg += "{0} {1}\n".format(end_id, edge_table[end_id]["state"])
-        lock.release()
-        switch_socket.sendto(msg.encode(), host_addr)
-        prompt(msg, "send route table to ctrl")
-        lock_k.release()
-
-    def refresh_edge_table(msg=None, is_init=False, end_id=None, flag=None):
-      # 传入 对\n split后的msg
-        lock.acquire()
-        if msg != None:  # 根据msg进行更新
-            if msg[0] == 'routing_table_update':
-                start_id = int(msg[1])
-                if start_id != my_id:
-                    exit(-1)
-
-                edge_table_temp = edge_table
-
-                # 若不是初始化
-                if not is_init:
-                    for end_id in edge_table:
-                        edge_table[end_id]["state"] = False
-
-                for i in range(2, len(msg)):
-                    link = msg[i].split()
-                    if len(link) != 2:
-                        break
-                    end_id = int(link[0])
-                    next_hop = int(link[1])
-                    edge_table[end_id]["next_hop"] = next_hop
-                    edge_table[end_id]["state"] = True
-                    if end_id not in edge_table_temp:
-                        edge_table[end_id]["refresh"] = False
-
-                if not is_init:
-                    # 若不是初始化，如果table无变动，不需要log
-                    if operator.eq(edge_table_temp, edge_table):
-                        lock.release()
-                        return
-        else:  # 根据state=flag进行更新
-            edge_table[end_id]["refresh"] = True  # 刷新
-            if edge_table[end_id]["state"] == flag:  # 若state不变，则退出,不log
-                lock.release()
-                return
-            edge_table[end_id]["state"] = flag
-
-        if not is_init:  # 如果不是初始化，既要log也要将更新的路由表发送给控制器
-            lock.release()
-            send_link()
-            lock.acquire()
-
-        # log
-        routing_table = make_routing_table_update(edge_table, my_id)
-        print("log routing_table:\n", routing_table)
-        routing_table_update(routing_table)
-        lock.release()
 
     def udp_routing_table_update_received():
         msg, _ = switch_socket.recvfrom(1024)
-        msg = msg.decode()
-        prompt(msg, "recv route table firstly")
-        # Parse the message
-        msg = msg.split('\n')
-        if msg[0] == 'routing_table_update':
-            refresh_edge_table(msg, True)
+        msg = Message().from_str(msg.decode())
+        msg.print()
+        # routing_table_update(msg.decode())
 
-    # 第一次接收路由表
     udp_routing_table_update_received()
 
-    def rec_infor():
+    # Periodically send keep alive messages to neighbors and update routing table
+    K = 2
+    TIMEOUT = 3*K
+
+    def create_timer(func, args, interval):
+        timer = threading.Timer(interval, func, args)
+        timer.start()
+        return timer
+
+    def create_thread(func, args):
+        thread = threading.Thread(target=func, args=args)
+        thread.start()
+        return thread
+
+    info_dist = {}
+    info_dist["keep_alive"] = {}
+    for id in neighbors:
+        info_dist["keep_alive"][id] = 1
+    info_dist["neighbors"] = neighbors
+
+    info_dist_lock = threading.Lock()
+
+    # 1 Each switch sends a Keep Alive message every K seconds to each of the neighboring switches that it thinks is ‘alive’.
+    def udp_keep_alive_sent():
+        info_dist_lock.acquire()
+        for id in info_dist["neighbors"]:
+            if info_dist["neighbors"][id]["alive"] == 0:
+                continue
+            msg = Message()
+            msg.set_type("keep_alive")
+            msg.add_object(my_id)
+            switch_socket.sendto(
+                bytes(msg), info_dist["neighbors"][id]["addr"])
+        info_dist_lock.release()
+
+        create_timer(udp_keep_alive_sent, [], K)
+
+    # 2 Each switch sends a Topology Update message to the controller every K seconds. The Topology Update message includes a set of ‘live’ neighbors of that switch.
+    def make_topology_update():
+        msg = Message()
+        msg.set_type("topology_update")
+        msg.add_object(my_id)
+
+        for id in info_dist["neighbors"]:
+            reachable = info_dist["neighbors"][id]["alive"]
+            msg.add_object([id, reachable])
+
+        return msg
+
+    def udp_topology_update_sent():
+        info_dist_lock.acquire()
+        msg = make_topology_update()
+        switch_socket.sendto(bytes(msg), ctrl_addr)
+        info_dist_lock.release()
+
+        create_timer(udp_topology_update_sent, [], K)
+
+    def udp_keepalive_timeout():
+        info_dist_lock.acquire()
+        for id in neighbors:
+            if info_dist["neighbors"][id]["alive"]:
+                if info_dist["keep_alive"][id]:
+                    info_dist["keep_alive"][id] = 0
+                else:
+                    # Equivalent to a link failure.
+                    # Send a topology update to the controller.
+                    info_dist["neighbors"][id]["alive"] = False
+                    msg = make_topology_update()
+                    switch_socket.sendto(bytes(msg), ctrl_addr)
+        info_dist_lock.release()
+
+        create_timer(udp_keepalive_timeout, [], TIMEOUT)
+
+    # 3
+    def udp_message_received():
         while True:
-            lock_k.acquire()
-            # 接收来自邻居交换机的活信息与来自控制器的路由更新表
-            msg, switch_addr = switch_socket.recvfrom(1024)
-            lock_k.release()
-            msg = msg.decode()
-            msg_temp = msg
-            msg = msg.split('\n')
-            # 可以通过发送地址或信息头来确定信息类别
-            if msg[0] == 'routing_table_update':
-                prompt(msg_temp, "rec route uptate from ctrl")
-                refresh_edge_table(msg, False)
-            elif msg[0] == 'KEEP_ALIVE':
-                prompt(msg_temp, "rec alive from "+str(msg[1]))
-                refresh_edge_table(msg=None, is_init=None,
-                                   end_id=int(msg[1]), flag=True)
+            msg, addr = switch_socket.recvfrom(1024)
+            msg = Message().from_str(msg.decode())
+            msg.print()
+            info_dist_lock.acquire()
 
-    def check_dead():
-        # 检测是否所有活邻居都alive刷新了
-        lock.acquire()
-        for end_id in edge_table:
-            # 若未刷新，则置死
-            if edge_table[end_id]["state"] == True and edge_table[end_id]["refresh"] != True:
-                lock.release()
-                refresh_edge_table(msg=None, is_init=None,
-                                   end_id=end_id, flag=False)
-                lock.acquire()
-            edge_table[end_id]["refresh"] = False
-        lock.release()
+            if msg.get_type() == "keep_alive":
+                id = msg.get_objects()[0][0]
 
-    # 定时进程
-    class RepeatingTimer(threading.Timer):
-        def run(self):
-            while not self.finished.is_set():
-                self.function(*self.args, **self.kwargs)
-                self.finished.wait(self.interval)
+                info_dist["keep_alive"][id] = 1
+                if not info_dist["neighbors"][id]["alive"]:
+                    info_dist["neighbors"][id]["alive"] = True
+                    # update neighbor address
+                    info_dist["neighbors"][id]["addr"] = addr
+                    msg = make_topology_update()
+                    switch_socket.sendto(bytes(msg), ctrl_addr)
+            elif msg.get_type() == "routing_table_update":
+                # routing_table_update(msg.get_objects())
+                pass
+            info_dist_lock.release()
 
-    t_send_alive = RepeatingTimer(K, send_alive)
-    t_send_alive.start()
-    # t_send_alive.cancel() #when to kill this thread?
-
-    t_send_link = RepeatingTimer(K, send_link)
-    t_send_link.start()
-
-    t_rec_infor = threading.Thread(target=rec_infor)
-    t_rec_infor.start()
-
-    t_check_dead = RepeatingTimer(Timeout, check_dead)
-    t_check_dead.start()
+    udp_keep_alive_sent()
+    create_thread(udp_topology_update_sent, [])
+    create_timer(udp_keepalive_timeout, [], TIMEOUT)
+    udp_message_received()
 
 
 if __name__ == "__main__":
