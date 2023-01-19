@@ -157,6 +157,7 @@ def main():
         msg = msg.split('\n')
         if msg[0] == "register_response":
             # 忽略msg[1]number-of-neighbors 不需要
+            # 此时会返回neighbor的信息，增添is_neighbor属性
             for i in range(2, len(msg)):
                 link = msg[i].split()
                 if len(link) != 3:
@@ -167,6 +168,7 @@ def main():
 
                 edge_table[end_id] = {
                     "state": True,
+                    "is_neighbor": True,
                     "next_hop": -1,
                     "addr": (addr1, addr2),
                     "refresh": False
@@ -174,6 +176,7 @@ def main():
             # add 自己到自己
             edge_table[my_id] = {
                 "state": True,
+                "is_neighbor": True,
                 "next_hop": my_id,
                 "addr": "",  # 不需要知道自己的地址吧？如果后续报错视为错误
                 "refresh": False
@@ -187,7 +190,7 @@ def main():
 
     # 接下来，要处理并发，加锁
     lock = threading.Lock()
-    lock_k = threading.Lock() #第k秒，接收keep alive的优先级比向ctrl发送table的优先级高
+    # lock_k = threading.Lock()  # 第k秒，接收keep alive的优先级比向ctrl发送table的优先级高
 
     def make_routing_table_update(edge_table, my_id):
         # <Switch ID>,<Dest ID>:<Next Hop>
@@ -205,10 +208,14 @@ def main():
 
     def send_alive():
         lock.acquire()
-        # 向活邻居发alive
+        # 向除了自己的、活的、邻居发alive
         msg = "KEEP_ALIVE\n{0}\n".format(my_id)
         for end_id in edge_table:
             if end_id == my_id:
+                continue
+            if not edge_table[end_id]["is_neighbor"]:
+                continue
+            if not edge_table[end_id]["state"]:
                 continue
             addr = edge_table[end_id]["addr"]
             lock.release()
@@ -218,19 +225,21 @@ def main():
         lock.release()
 
     def send_link():
-      # 向控制器发送自己的邻居死活情况
-        lock_k.acquire()
+      # 向控制器发送自己所有的邻居死活情况
+        # lock_k.acquire()
         lock.acquire()
         msg = "routing_table_update\n"
         msg += str(my_id)+'\n'
         for end_id in edge_table:
             if end_id == my_id:
                 continue
+            if not edge_table[end_id]["is_neighbor"]:
+                continue
             msg += "{0} {1}\n".format(end_id, edge_table[end_id]["state"])
         lock.release()
         switch_socket.sendto(msg.encode(), host_addr)
         prompt(msg, "send route table to ctrl")
-        lock_k.release()
+        # lock_k.release()
 
     def refresh_edge_table(msg=None, is_init=False, end_id=None, flag=None):
       # 传入 对\n split后的msg
@@ -245,7 +254,7 @@ def main():
 
                 # 若不是初始化
                 if not is_init:
-                    for end_id in edge_table:
+                    for end_id in edge_table:  # 先把所有点置死
                         edge_table[end_id]["state"] = False
 
                 for i in range(2, len(msg)):
@@ -254,6 +263,18 @@ def main():
                         break
                     end_id = int(link[0])
                     next_hop = int(link[1])
+                    print("***", end_id, next_hop)
+
+                    if is_init:  # 如果是初始化，要对非邻居的点先初始化
+                        if end_id not in edge_table:
+                            edge_table[end_id] = {
+                                "state": True,
+                                "is_neighbor": False,
+                                "next_hop": -1,
+                                # "addr": (addr1, addr2),
+                                # "refresh": False
+                            }
+
                     edge_table[end_id]["next_hop"] = next_hop
                     edge_table[end_id]["state"] = True
                     if end_id not in edge_table_temp:
@@ -296,10 +317,10 @@ def main():
 
     def rec_infor():
         while True:
-            lock_k.acquire()
+            # lock_k.acquire()
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
             msg, switch_addr = switch_socket.recvfrom(1024)
-            lock_k.release()
+            # lock_k.release()
             msg = msg.decode()
             msg_temp = msg
             msg = msg.split('\n')
@@ -316,11 +337,16 @@ def main():
         # 检测是否所有活邻居都alive刷新了
         lock.acquire()
         for end_id in edge_table:
+            if not edge_table[end_id]["state"]:
+                continue
+            if not edge_table[end_id]["is_neighbor"]:
+                continue
             # 若未刷新，则置死
-            if edge_table[end_id]["state"] == True and edge_table[end_id]["refresh"] != True:
+            if edge_table[end_id]["refresh"] != True:
                 lock.release()
                 refresh_edge_table(msg=None, is_init=None,
                                    end_id=end_id, flag=False)
+                neighbor_dead(end_id)
                 lock.acquire()
             edge_table[end_id]["refresh"] = False
         lock.release()

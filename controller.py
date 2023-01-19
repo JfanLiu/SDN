@@ -6,6 +6,7 @@ Email: du201@purdue.edu
 Last Modified Date: December 9th, 2021
 """
 
+import json
 import sys
 from datetime import date, datetime
 import socket
@@ -120,10 +121,11 @@ def write_to_log(log):
 
 def prompt(msg, msg_name):
     print(msg_name+"\n"+msg)
-    
-import json
+
+
 def pretty(d):
-  print(json.dumps(d, indent=4, ensure_ascii=False))
+    print(json.dumps(d, indent=4, ensure_ascii=False))
+
 
 def main():
     # Check for number of arguments and exit if host/port not provided
@@ -144,14 +146,14 @@ def main():
         num_switch = int(config[0].strip())
         for i in range(1, len(config)):
             link = config[i].strip().split()
-            if len(link)!=3:
-              continue
+            if len(link) != 3:
+                continue
             start_id = int(link[0])
             end_id = int(link[1])
             dis = int(link[2])
             # 无向边 存储两份，空间换时间
-            
-            #init vertice
+
+            # init vertice
             if start_id not in switch_table:
                 switch_table[start_id] = {
                     "edge": {},
@@ -166,8 +168,8 @@ def main():
                     "addr": "",
                     "refresh": False
                 }
-            
-            #add edge
+
+            # add edge
             switch_table[start_id]["edge"][end_id] = {
                 "dis": dis,
                 "next_hop": -1,
@@ -235,6 +237,8 @@ def main():
 
         # init
         for switch_id in switch_table:
+            if not switch_table[switch_id]["state"]:
+                continue  # 若已死，则不入网
             if switch_id != src:
                 unvisited[switch_id] = {
                     "dis": 9999,
@@ -261,10 +265,11 @@ def main():
 
             # 从current_id出发，更新unvisited表中其出边的最短距离
             for end_id in switch_table[current_id]["edge"]:
+                if not switch_table[end_id]["state"]:
+                    continue  # 若已死，则不入网
                 if end_id in visited:  # 若出点已visit，则不更新
                     continue
-                new_distance = current["dis"] + \
-                    switch_table[current_id]["edge"][end_id]["dis"]
+                new_distance = current["dis"] + switch_table[current_id]["edge"][end_id]["dis"]
                 if new_distance < unvisited[end_id]["dis"]:
                     unvisited[end_id]["dis"] = new_distance
                     unvisited[end_id]["next_hop"] = current_id
@@ -284,7 +289,7 @@ def main():
                 if last == src:  # 结点本身是链路上第2个结点
                     visited_temp[end_id]["next_hop"] = end_id
                     break
-                if visited[last]["next_hop"] == src:  # 结点本身是链路上第3个结点
+                if visited[last]["next_hop"] == last:  # 结点本身是链路上第3个结点
                     break
                 visited_temp[end_id]["next_hop"] = visited[last]["next_hop"]
 
@@ -298,24 +303,34 @@ def main():
         # cal the shortest path and make routing_table
         routing_table = []
         for switch_id in switch_table:
+            if not switch_table[switch_id]["state"]:  # 死了就不作起点
+                continue
             path = compute_path(switch_id)
             for s_id in switch_table:
-                routing_table.append(
-                    [switch_id, s_id, path[s_id]["next_hop"], path[s_id]["dis"]])
+                # 死了可以做出点
+                if not switch_table[s_id]["state"]:
+                    routing_table.append(
+                        [switch_id, s_id, -1, 9999])
+                else:
+                    routing_table.append(
+                        [switch_id, s_id, path[s_id]["next_hop"], path[s_id]["dis"]])
 
+        routing_table.sort(key=lambda x: (x[0], x[1]))
         print("routing_table: ", routing_table)
 
         # Sending routing table to all switches
         for switch_id in switch_table:
+            if not switch_table[switch_id]["state"]:  # 死了就不送
+                continue
             msg = "routing_table_update\n"
             msg += str(switch_id) + "\n"
             for edge in routing_table:
                 if edge[0] == switch_id:
                     msg += "{0} {1}\n".format(edge[1], edge[2])
             prompt(msg, "send route table")
-            addr=switch_table[switch_id]["addr"]
+            addr = switch_table[switch_id]["addr"]
             lock.release()
-            ctrl_socket.sendto(msg.encode(),addr)
+            ctrl_socket.sendto(msg.encode(), addr)
             lock.acquire()
 
         # log
@@ -324,8 +339,6 @@ def main():
         lock.release()
 
     udp_routing_table_update_sent()
-    
-    
 
     def refresh_switch_table(msg=None, id=None, flag=None):
         lock.acquire()
@@ -339,14 +352,14 @@ def main():
 
                 for end_id in switch_table[start_id]["edge"]:
                     switch_table[start_id]["edge"][end_id]["state"] = False
-                
+
                 for i in range(2, len(msg)):
                     link = msg[i].split()
-                    if len(link)!=2:
-                      break
+                    if len(link) != 2:
+                        break
                     end_id = int(link[0])
-                    state = link[1] == True                    
-                    
+                    state = link[1] == True
+
                     switch_table[start_id]["edge"][end_id]["state"] = state
 
                 if operator.eq(switch_table, switch_table_temp):
@@ -367,7 +380,7 @@ def main():
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
             msg, switch_addr = ctrl_socket.recvfrom(1024)
             msg = msg.decode()
-            msg_tmep=msg
+            msg_tmep = msg
             msg = msg.split('\n')
             # 可以通过发送地址或信息头来确定信息类别
             if msg[0] == 'routing_table_update':
@@ -388,6 +401,7 @@ def main():
             if switch_table[start_id]["state"] == True and switch_table[start_id]["refresh"] != True:
                 lock.release()
                 refresh_switch_table(None, start_id, False)
+                topology_update_switch_dead(start_id)
                 lock.acquire()
             switch_table[start_id]["refresh"] = False
 
