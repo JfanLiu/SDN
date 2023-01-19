@@ -120,7 +120,10 @@ def write_to_log(log):
 
 def prompt(msg, msg_name):
     print(msg_name+"\n"+msg)
-
+    
+import json
+def pretty(d):
+  print(json.dumps(d, indent=4, ensure_ascii=False))
 
 def main():
     # Check for number of arguments and exit if host/port not provided
@@ -130,7 +133,7 @@ def main():
         sys.exit(1)
 
     port = int(sys.argv[1])
-    num_links = 0  # the num of link
+    num_switch = 0  # the num of switch
     switch_table = {}
     K = 2  # period
     Timeout = K*3
@@ -138,13 +141,17 @@ def main():
     # Parse the config file
     with open(sys.argv[2], 'r') as config_file:
         config = config_file.readlines()
-        num_links = int(config[0].strip())
-        for i in range(1, num_links + 1):
+        num_switch = int(config[0].strip())
+        for i in range(1, len(config)):
             link = config[i].strip().split()
+            if len(link)!=3:
+              continue
             start_id = int(link[0])
             end_id = int(link[1])
             dis = int(link[2])
             # 无向边 存储两份，空间换时间
+            
+            #init vertice
             if start_id not in switch_table:
                 switch_table[start_id] = {
                     "edge": {},
@@ -159,6 +166,8 @@ def main():
                     "addr": "",
                     "refresh": False
                 }
+            
+            #add edge
             switch_table[start_id]["edge"][end_id] = {
                 "dis": dis,
                 "next_hop": -1,
@@ -170,11 +179,9 @@ def main():
                 "state": True
             }
 
-    num_switch = len(switch_table)
-
     print("port: ", port)
-    print("switch_table: ", switch_table)
-    print("num_links: ", num_links)
+    pretty(switch_table)
+    print("num_switch: ", num_switch)
 
     ctrl_socket = socket.socket(
         socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
@@ -318,9 +325,7 @@ def main():
 
     udp_routing_table_update_sent()
     
-    import json
-    def pretty(d):
-      print(json.dumps(d, indent=4, ensure_ascii=False))
+    
 
     def refresh_switch_table(msg=None, id=None, flag=None):
         lock.acquire()
