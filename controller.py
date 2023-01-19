@@ -191,6 +191,8 @@ def main():
     ctrl_socket.bind(('', port))
 
     switch_count = 0
+    
+    ls_id=[]
 
     # Loop for waiting for all switches to register
     # Once all switches have registered, send register_response to all switches
@@ -202,8 +204,9 @@ def main():
         # Parse the message
         msg = msg.split()
         if msg[0] == "register_request":
-            req_id = msg[1]
-            switch_table[int(req_id)]["addr"] = switch_addr
+            req_id = int(msg[1])
+            switch_table[req_id]["addr"] = switch_addr
+            ls_id.append(req_id)
             # print(switch_addr)
             switch_count += 1
             register_request_received(req_id)
@@ -216,7 +219,7 @@ def main():
 
     # register response
     # 广播switch的所有出边与对应地址
-    for switch_id in switch_table:
+    for switch_id in ls_id:
         msg = "register_response\n"
         msg += str(len(switch_table[switch_id]["edge"]))+"\n"
         for end_id in switch_table[switch_id]["edge"]:
