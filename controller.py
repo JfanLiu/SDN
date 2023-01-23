@@ -137,7 +137,7 @@ def main():
     port = int(sys.argv[1])
     num_switch = 0  # the num of switch
     switch_table = {}
-    K = 2  # period
+    K = 10  # period
     Timeout = K*3
 
     # Parse the config file
@@ -182,7 +182,7 @@ def main():
             }
 
     print("port: ", port)
-    pretty(switch_table)
+    
     print("num_switch: ", num_switch)
 
     ctrl_socket = socket.socket(
@@ -194,9 +194,9 @@ def main():
 
     # Loop for waiting for all switches to register
     # Once all switches have registered, send register_response to all switches
-    
-    ls_id=[]
-    
+
+    ls_id = []
+
     while True:
         msg, switch_addr = ctrl_socket.recvfrom(1024)
         msg = msg.decode()
@@ -205,7 +205,7 @@ def main():
         # Parse the message
         msg = msg.split()
         if msg[0] == "register_request":
-            req_id =int(msg[1])
+            req_id = int(msg[1])
             switch_table[req_id]["addr"] = switch_addr
             # print(switch_addr)
             ls_id.append(req_id)
@@ -217,6 +217,8 @@ def main():
 
         if switch_count == num_switch:
             break
+      
+    pretty(switch_table)
 
     # register response
     # 广播switch的所有出边与对应地址
@@ -273,7 +275,8 @@ def main():
                     continue  # 若已死，则不入网
                 if end_id in visited:  # 若出点已visit，则不更新
                     continue
-                new_distance = current["dis"] + switch_table[current_id]["edge"][end_id]["dis"]
+                new_distance = current["dis"] + \
+                    switch_table[current_id]["edge"][end_id]["dis"]
                 if new_distance < unvisited[end_id]["dis"]:
                     unvisited[end_id]["dis"] = new_distance
                     unvisited[end_id]["next_hop"] = current_id
@@ -344,8 +347,8 @@ def main():
 
     udp_routing_table_update_sent()
 
-    def refresh_switch_table(msg=None, id=None, flag=None):
-        lock.acquire()
+    def refresh_switch_table_simple(msg=None, id=None, flag=None):
+
         if msg != None:
             if msg[0] == 'routing_table_update':
                 start_id = int(msg[1])
@@ -367,17 +370,19 @@ def main():
                     switch_table[start_id]["edge"][end_id]["state"] = state
 
                 if operator.eq(switch_table, switch_table_temp):
-                    lock.release()
                     return
         else:
             if switch_table[id]["state"] == flag:
-                lock.release()
                 return
             switch_table[id]["state"] = flag
 
-        lock.release()
         # table有变，刷新，广播，log
         udp_routing_table_update_sent()
+
+    def refresh_switch_table_thread(msg=None, id=None, flag=None):
+        lock.acquire()
+        refresh_switch_table_simple(msg, id, flag)
+        lock.release()
 
     def rec_infor():
         while True:
@@ -389,26 +394,33 @@ def main():
             # 可以通过发送地址或信息头来确定信息类别
             if msg[0] == 'routing_table_update':
                 prompt(msg_tmep, "rev route update from "+msg[1])
-                refresh_switch_table(msg)
+                refresh_switch_table_thread(msg)
             elif msg[0] == "register_request":
                 req_id = int(msg[1])
                 prompt(msg_tmep, "rev register request from "+req_id)
-                refresh_switch_table(None, req_id, True)
+                refresh_switch_table_thread(None, req_id, True)
 
-    def check_dead():
-
-        lock.acquire()
-
+    def check_dead_simple():
         # 检测是否所有活邻居都alive刷新了
         for start_id in switch_table:
             # 若未刷新，则置死
             if switch_table[start_id]["state"] == True and switch_table[start_id]["refresh"] != True:
-                lock.release()
-                refresh_switch_table(None, start_id, False)
+
+                refresh_switch_table_simple(None, start_id, False)
+
                 topology_update_switch_dead(start_id)
-                lock.acquire()
+
             switch_table[start_id]["refresh"] = False
 
+
+    is_first_check_dead_thread=True
+    def check_dead_thread():
+        nonlocal is_first_check_dead_thread
+        if is_first_check_dead_thread:
+          is_first_check_dead_thread=False
+          return
+        lock.acquire()
+        check_dead_simple()
         lock.release()
 
     # 定时进程
@@ -418,7 +430,7 @@ def main():
                 self.function(*self.args, **self.kwargs)
                 self.finished.wait(self.interval)
 
-    t_check_dead = RepeatingTimer(Timeout, check_dead)
+    t_check_dead = RepeatingTimer(Timeout, check_dead_thread)
     t_check_dead.start()
 
     t_rec_infor = threading.Thread(target=rec_infor)

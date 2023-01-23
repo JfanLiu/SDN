@@ -102,7 +102,10 @@ def write_to_log(log):
 def prompt(msg, msg_name):
     print(msg_name+"\n"+msg)
 
-
+import json
+def pretty(d):
+    return (json.dumps(d, indent=4, ensure_ascii=False))
+    
 def main():
 
     global LOG_FILE
@@ -118,7 +121,7 @@ def main():
     my_id = int(sys.argv[1])
     ctrl_hostname = sys.argv[2]
     ctrl_port = int(sys.argv[3])
-    K = 2  # period
+    K = 10  # period
     Timeout = K*3
 
     edge_table = {}
@@ -190,9 +193,10 @@ def main():
     udp_register_response_received()
 
     # 接下来，要处理并发，加锁
-    lock = threading.Lock()
+    lock = threading.Lock()   
     lock_msg = threading.Lock()
     lock_rec_Queue=threading.Lock()
+    # lock_socket=threading.Lock()
     # lock_k = threading.Lock()  # 第k秒，接收keep alive的优先级比向ctrl发送table的优先级高
 
     # 让一个线程专门负责发送
@@ -229,14 +233,14 @@ def main():
                 continue
             addr = edge_table[end_id]["addr"]
             # switch_socket.sendto(msg.encode(), addr)
-            prompt(msg, "send keep alive to "+str(end_id))
+            # prompt(msg, "send keep alive to "+str(end_id))
             msgQueue_temp.append({
                 "msg": msg,
                 "addr": addr
             })
         lock_msg.acquire()
         for i in msgQueue_temp:
-            msgQueue.append(msgQueue_temp[i])
+            msgQueue.append(i)
         lock_msg.release()
 
     def send_alive_thread():
@@ -257,11 +261,13 @@ def main():
             msg += "{0} {1}\n".format(end_id, edge_table[end_id]["state"])
 
         #switch_socket.sendto(msg.encode(), host_addr)
+        lock_msg.acquire()
         msgQueue.append({
             "msg": msg,
             "addr": host_addr
         })
-        prompt(msg, "send route table to ctrl")
+        lock_msg.release()
+        # prompt(msg, "send route table to ctrl")
 
     def send_link_thread():
         lock.acquire()
@@ -340,19 +346,6 @@ def main():
 
     # 第一次接收路由表
     udp_routing_table_update_received()
-    
-    def rec_infor():
-      while True:
-        msg, switch_addr = switch_socket.recvfrom(1024)
-        
-        lock_rec_Queue.acquire()
-
-        msg_rev_Queue.append({
-          "msg":msg.decode(),
-          "addr":switch_addr
-        })
-        
-        lock_rec_Queue.release()
         
     def send_infor():
       while True:
@@ -361,39 +354,72 @@ def main():
           lock_msg.release()
           time.sleep(K*0.1==0)
           continue
-        msg_dict=msgQueue.pop(0)
-        switch_socket.sendto(msg_dict["msg"].encode(), msg_dict["addr"])
-        lock_msg.release()
+        else:
+          msgQueue.sort(key=lambda x:x["msg"][0]=='r')
+          print("\n msqQueue:\n",pretty(msgQueue))
+          
+          msg_dict=msgQueue.pop(0)
+          print("\nsend to ",msg_dict["addr"],":")
+          print(msg_dict["msg"])
+          # lock_socket.acquire()
+          switch_socket.sendto(msg_dict["msg"].encode(), msg_dict["addr"])
+          # lock_socket.release()
+          lock_msg.release()
+          
+    def rec_infor():
+      while True:
+        # print(9*'*')
+        msg, switch_addr = switch_socket.recvfrom(1024)
+        lock_rec_Queue.acquire()
+        msg_rev_Queue.append({
+          "msg":msg.decode(),
+          "addr":switch_addr
+        })
+        
+        lock_rec_Queue.release()
         
     def deal_rec_infor():
-        while True:
-            # 接收来自邻居交换机的活信息与来自控制器的路由更新表
-            
-            lock_rec_Queue.acquire()
-
-            if len(msg_rev_Queue)==0:
-              lock_rec_Queue.release()
-              continue
-            
-            msg_dict=msg_rev_Queue.pop(0)
+      while True:
+        # 接收来自邻居交换机的活信息与来自控制器的路由更新表
         
-            lock_rec_Queue.release()
-            
-            msg=msg_dict["msg"]
-            msg_temp = msg
-            msg = msg.split('\n')
-            # 可以通过发送地址或信息头来确定信息类别
-            if msg[0] == 'routing_table_update':
-                prompt(msg_temp, "rec route uptate from ctrl")
-                refresh_edge_table(msg, False)
-            elif msg[0] == 'KEEP_ALIVE':
-                prompt(msg_temp, "rec alive from "+str(msg[1]))
-                refresh_edge_table(msg=None, is_init=None,
-                                   end_id=int(msg[1]), flag=True)
+        lock_rec_Queue.acquire()
+
+        if len(msg_rev_Queue)==0:
+          lock_rec_Queue.release()
+          time.sleep(K*0.1)
+          continue
+        
+        print("msg_rev_Queue:\n",msg_rev_Queue)
+        
+        msg_dict=msg_rev_Queue.pop(0)
+    
+        lock_rec_Queue.release()
+        
+        
+        msg=msg_dict["msg"]
+        msg_temp = msg
+        msg = msg.split('\n')
+        # 可以通过发送地址或信息头来确定信息类别
+        if msg[0] == 'routing_table_update':
+            prompt(msg_temp, "rec route uptate from ctrl")
+            refresh_edge_table(msg, False)
+        elif msg[0] == 'KEEP_ALIVE':
+            prompt(msg_temp, "rec alive from "+str(msg[1]))
+            refresh_edge_table(msg=None, is_init=None,
+                                end_id=int(msg[1]), flag=True)
 
     def check_dead():
         # 检测是否所有活邻居都alive刷新了
-        lock.acquire()
+        
+        #把当前要发送的消息发完才能checkdead
+        while True:
+          lock_msg.acquire()
+          if len(msgQueue)==0:
+            lock_msg.release()
+            break
+          else:
+            lock_msg.release()
+
         for end_id in edge_table:
             if not edge_table[end_id]["state"]:
                 continue
@@ -401,11 +427,11 @@ def main():
                 continue
             # 若未刷新，则置死
             if edge_table[end_id]["refresh"] != True:
+                print("make {0}# switch dead".format(end_id))
                 refresh_edge_table_simple(msg=None, is_init=None,
                                    end_id=end_id, flag=False)
                 neighbor_dead(end_id)
             edge_table[end_id]["refresh"] = False
-        lock.release()
 
     # 定时进程
     class RepeatingTimer(threading.Timer):
@@ -413,22 +439,35 @@ def main():
             while not self.finished.is_set():
                 self.function(*self.args, **self.kwargs)
                 self.finished.wait(self.interval)
+                
+    
+    # time.sleep(K)
 
+    #将alive送到消息队列
     t_send_alive = RepeatingTimer(K, send_alive_thread)
     t_send_alive.start()
     # t_send_alive.cancel() #when to kill this thread?
+    
+    #将send消息队列中的消息出队、发送
+    t_send_infor = threading.Thread(target=send_infor)
+    t_send_infor.start()
 
-    t_send_link = RepeatingTimer(K, send_link_thread)
-    t_send_link.start()
-
+    #接受信息，送入接受信息队列
     t_rec_infor = threading.Thread(target=rec_infor)
     t_rec_infor.start()
     
+    #将接收信息队列中的信息取出，处理
     t_deal_rec_infor = threading.Thread(target=deal_rec_infor)
     t_deal_rec_infor.start()
 
+    #处理dead的switch
     t_check_dead = RepeatingTimer(Timeout, check_dead)
     t_check_dead.start()
+    
+    #将拓扑更新信息送到消息队列
+    t_send_link = RepeatingTimer(K, send_link_thread)
+    t_send_link.start()
+
 
 
 if __name__ == "__main__":
