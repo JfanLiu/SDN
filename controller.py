@@ -12,6 +12,7 @@ from datetime import date, datetime
 import socket
 import threading
 import operator
+import time
 
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 LOG_FILE = "Controller.log"
@@ -301,8 +302,6 @@ def main():
     def udp_routing_table_update_sent():
         # 读取table，make 路由表，按序广播，log
 
-        lock.acquire()
-
         # cal the shortest path and make routing_table
         routing_table = []
         for switch_id in switch_table:
@@ -332,19 +331,16 @@ def main():
                     msg += "{0} {1}\n".format(edge[1], edge[2])
             prompt(msg, "send route table")
             addr = switch_table[switch_id]["addr"]
-            lock.release()
+  
             ctrl_socket.sendto(msg.encode(), addr)
-            lock.acquire()
-
+  
         # log
         routing_table_update(routing_table)
 
-        lock.release()
 
     udp_routing_table_update_sent()
 
     def refresh_switch_table(msg=None, id=None, flag=None):
-        lock.acquire()
         if msg != None:
             if msg[0] == 'routing_table_update':
                 start_id = int(msg[1])
@@ -366,15 +362,12 @@ def main():
                     switch_table[start_id]["edge"][end_id]["state"] = state
 
                 if operator.eq(switch_table, switch_table_temp):
-                    lock.release()
                     return
         else:
             if switch_table[id]["state"] == flag:
-                lock.release()
                 return
             switch_table[id]["state"] = flag
 
-        lock.release()
         # table有变，刷新，广播，log
         udp_routing_table_update_sent()
 
@@ -385,6 +378,9 @@ def main():
             msg = msg.decode()
             msg_tmep = msg
             msg = msg.split('\n')
+            
+            lock.acquire()
+            
             # 可以通过发送地址或信息头来确定信息类别
             if msg[0] == 'routing_table_update':
                 prompt(msg_tmep, "rev route update from "+msg[1])
@@ -393,6 +389,8 @@ def main():
                 req_id = int(msg[1])
                 prompt(msg_tmep, "rev register request from "+req_id)
                 refresh_switch_table(None, req_id, True)
+                
+            lock.release()
 
     def check_dead():
 
@@ -402,10 +400,9 @@ def main():
         for start_id in switch_table:
             # 若未刷新，则置死
             if switch_table[start_id]["state"] == True and switch_table[start_id]["refresh"] != True:
-                lock.release()
-                refresh_switch_table(None, start_id, False)
-                topology_update_switch_dead(start_id)
-                lock.acquire()
+                print("#{0} switch dead".format(start_id))
+                refresh_switch_table(None, start_id, False)#will log
+                
             switch_table[start_id]["refresh"] = False
 
         lock.release()
@@ -416,13 +413,13 @@ def main():
             while not self.finished.is_set():
                 self.function(*self.args, **self.kwargs)
                 self.finished.wait(self.interval)
-
-    t_check_dead = RepeatingTimer(Timeout, check_dead)
-    t_check_dead.start()
-
+                
     t_rec_infor = threading.Thread(target=rec_infor)
     t_rec_infor.start()
-
+    
+    time.sleep(Timeout)
+    t_check_dead = RepeatingTimer(Timeout, check_dead)
+    t_check_dead.start()
 
 if __name__ == "__main__":
     main()

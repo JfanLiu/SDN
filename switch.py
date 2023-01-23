@@ -11,6 +11,7 @@ from datetime import date, datetime
 import socket
 import threading
 import operator
+import time
 
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 # The log file for switches are switch#.log, where # is the id of that switch (i.e. switch0.log, switch1.log). The code for replacing # with a real number has been given to you in the main function.
@@ -205,29 +206,30 @@ def main():
             ])
         routing_table.sort(key=lambda x: (x[0], x[1]))
         return routing_table
+      
 
     def send_alive():
         lock.acquire()
+        
+        def send_alive_thread():
         # 向除了自己的、活的、邻居发alive
-        msg = "KEEP_ALIVE\n{0}\n".format(my_id)
-        for end_id in edge_table:
-            if end_id == my_id:
-                continue
-            if not edge_table[end_id]["is_neighbor"]:
-                continue
-            if not edge_table[end_id]["state"]:
-                continue
-            addr = edge_table[end_id]["addr"]
-            lock.release()
-            switch_socket.sendto(msg.encode(), addr)
-            prompt(msg, "send keep alive to "+str(end_id))
-            lock.acquire()
+          msg = "KEEP_ALIVE\n{0}\n".format(my_id)
+          for end_id in edge_table:
+              if end_id == my_id:
+                  continue
+              if not edge_table[end_id]["is_neighbor"]:
+                  continue
+              if not edge_table[end_id]["state"]:
+                  continue
+              addr = edge_table[end_id]["addr"]
+              switch_socket.sendto(msg.encode(), addr)
+              prompt(msg, "send keep alive to "+str(end_id))
+           
+        send_alive_thread()
         lock.release()
-
-    def send_link():
+        
+    def send_link_simple():
       # 向控制器发送自己所有的邻居死活情况
-        # lock_k.acquire()
-        lock.acquire()
         msg = "routing_table_update\n"
         msg += str(my_id)+'\n'
         for end_id in edge_table:
@@ -236,14 +238,17 @@ def main():
             if not edge_table[end_id]["is_neighbor"]:
                 continue
             msg += "{0} {1}\n".format(end_id, edge_table[end_id]["state"])
-        lock.release()
         switch_socket.sendto(msg.encode(), host_addr)
         prompt(msg, "send route table to ctrl")
-        # lock_k.release()
+
+    def send_link():
+      # 向控制器发送自己所有的邻居死活情况
+        lock.acquire()
+        send_link_simple()
+        lock.release()
 
     def refresh_edge_table(msg=None, is_init=False, end_id=None, flag=None):
       # 传入 对\n split后的msg
-        lock.acquire()
         if msg != None:  # 根据msg进行更新
             if msg[0] == 'routing_table_update':
                 start_id = int(msg[1])
@@ -263,7 +268,6 @@ def main():
                         break
                     end_id = int(link[0])
                     next_hop = int(link[1])
-                    print("***", end_id, next_hop)
 
                     if is_init:  # 如果是初始化，要对非邻居的点先初始化
                         if end_id not in edge_table:
@@ -283,25 +287,20 @@ def main():
                 if not is_init:
                     # 若不是初始化，如果table无变动，不需要log
                     if operator.eq(edge_table_temp, edge_table):
-                        lock.release()
                         return
         else:  # 根据state=flag进行更新
             edge_table[end_id]["refresh"] = True  # 刷新
             if edge_table[end_id]["state"] == flag:  # 若state不变，则退出,不log
-                lock.release()
                 return
             edge_table[end_id]["state"] = flag
 
         if not is_init:  # 如果不是初始化，既要log也要将更新的路由表发送给控制器
-            lock.release()
-            send_link()
-            lock.acquire()
+            send_link_simple()
 
         # log
         routing_table = make_routing_table_update(edge_table, my_id)
         print("log routing_table:\n", routing_table)
         routing_table_update(routing_table)
-        lock.release()
 
     def udp_routing_table_update_received():
         msg, _ = switch_socket.recvfrom(1024)
@@ -309,21 +308,25 @@ def main():
         prompt(msg, "recv route table firstly")
         # Parse the message
         msg = msg.split('\n')
+        lock.acquire()
         if msg[0] == 'routing_table_update':
             refresh_edge_table(msg, True)
+        lock.release()
 
     # 第一次接收路由表
     udp_routing_table_update_received()
 
     def rec_infor():
         while True:
-            # lock_k.acquire()
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
             msg, switch_addr = switch_socket.recvfrom(1024)
-            # lock_k.release()
             msg = msg.decode()
             msg_temp = msg
             msg = msg.split('\n')
+            
+            print("******",msg_temp)
+            lock.acquire()
+            
             # 可以通过发送地址或信息头来确定信息类别
             if msg[0] == 'routing_table_update':
                 prompt(msg_temp, "rec route uptate from ctrl")
@@ -332,6 +335,8 @@ def main():
                 prompt(msg_temp, "rec alive from "+str(msg[1]))
                 refresh_edge_table(msg=None, is_init=None,
                                    end_id=int(msg[1]), flag=True)
+            
+            lock.release()
 
     def check_dead():
         # 检测是否所有活邻居都alive刷新了
@@ -343,11 +348,9 @@ def main():
                 continue
             # 若未刷新，则置死
             if edge_table[end_id]["refresh"] != True:
-                lock.release()
                 refresh_edge_table(msg=None, is_init=None,
                                    end_id=end_id, flag=False)
                 neighbor_dead(end_id)
-                lock.acquire()
             edge_table[end_id]["refresh"] = False
         lock.release()
 
@@ -357,20 +360,23 @@ def main():
             while not self.finished.is_set():
                 self.function(*self.args, **self.kwargs)
                 self.finished.wait(self.interval)
-
+                
+    #先启动接收
+    t_rec_infor = threading.Thread(target=rec_infor)
+    t_rec_infor.start()
+    
+    send_alive()
+    time.sleep(K)
+    
     t_send_alive = RepeatingTimer(K, send_alive)
     t_send_alive.start()
-    # t_send_alive.cancel() #when to kill this thread?
 
     t_send_link = RepeatingTimer(K, send_link)
     t_send_link.start()
-
-    t_rec_infor = threading.Thread(target=rec_infor)
-    t_rec_infor.start()
-
+    
+    time.sleep(Timeout)
     t_check_dead = RepeatingTimer(Timeout, check_dead)
     t_check_dead.start()
-
-
+    
 if __name__ == "__main__":
     main()
