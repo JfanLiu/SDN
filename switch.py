@@ -135,16 +135,15 @@ def main():
     print("controller port: ", ctrl_port)
     print("f_neighbors: ", f_neighbors)
 
-    switch_socket = socket.socket(
-        socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
+    switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
     # switch as client, connect to controller as server
     host_addr = (ctrl_hostname, ctrl_port)
-    switch_socket.connect(host_addr)
+    # switch_socket.connect(host_addr)
 
     def udp_register_request_sent():
         msg = "register_request "+str(my_id)
         prompt(msg, "send")
-        switch_socket.sendall(msg.encode())
+        switch_socket.sendto(msg.encode(),host_addr)
         register_request_sent()
 
     def udp_register_response_received():
@@ -324,7 +323,6 @@ def main():
             msg_temp = msg
             msg = msg.split('\n')
             
-            print("******",msg_temp)
             lock.acquire()
             
             # 可以通过发送地址或信息头来确定信息类别
