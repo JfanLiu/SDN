@@ -12,7 +12,7 @@ import socket
 import threading
 import operator
 import time
-
+import json
 # Please do not modify the name of the log file, otherwise you will lose points because the grader won't be able to find your log file
 # The log file for switches are switch#.log, where # is the id of that switch (i.e. switch0.log, switch1.log). The code for replacing # with a real number has been given to you in the main function.
 LOG_FILE = "switch#.log"
@@ -222,7 +222,12 @@ def main():
               if not edge_table[end_id]["state"]:
                   continue
               addr = edge_table[end_id]["addr"]
-              switch_socket.sendto(msg.encode(), addr)
+              
+              msg_dict={
+                "msg":msg,
+                "addr":addr
+              }
+              switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
               prompt(msg, "send keep alive to "+str(end_id))
            
         send_alive_thread()
@@ -238,7 +243,12 @@ def main():
             if not edge_table[end_id]["is_neighbor"]:
                 continue
             msg += "{0} {1}\n".format(end_id, edge_table[end_id]["state"])
-        switch_socket.sendto(msg.encode(), host_addr)
+          
+        msg_dict={
+                "msg":msg,
+                "addr":host_addr
+              }
+        switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
         prompt(msg, "send route table to ctrl")
 
     def send_link():

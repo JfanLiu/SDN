@@ -374,8 +374,11 @@ def main():
     def rec_infor():
         while True:
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
-            msg, switch_addr = ctrl_socket.recvfrom(1024)
-            msg = msg.decode()
+            msg_dict, switch_addr = ctrl_socket.recvfrom(1024)
+            msg_dict = msg_dict.decode()
+            
+            msg_dict=json.loads(msg_dict.decode())
+            
             msg_tmep = msg
             msg = msg.split('\n')
             
