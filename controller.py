@@ -383,7 +383,7 @@ def main():
             
             # 可以通过发送地址或信息头来确定信息类别
             if msg[0] == 'routing_table_update':
-                prompt(msg_tmep, "rev route update from "+msg[1])
+                prompt(msg_tmep, str(switch_addr)+"rev route update from "+msg[1])
                 refresh_switch_table(msg)
             elif msg[0] == "register_request":
                 req_id = int(msg[1])

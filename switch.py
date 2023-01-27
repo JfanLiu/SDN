@@ -136,6 +136,7 @@ def main():
     print("f_neighbors: ", f_neighbors)
 
     switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
+    
     # switch as client, connect to controller as server
     host_addr = (ctrl_hostname, ctrl_port)
     # switch_socket.connect(host_addr)
@@ -356,23 +357,21 @@ def main():
     class RepeatingTimer(threading.Timer):
         def run(self):
             while not self.finished.is_set():
-                self.function(*self.args, **self.kwargs)
+                self.function(*self.args, **self.kwargs)  
                 self.finished.wait(self.interval)
                 
     #先启动接收
     t_rec_infor = threading.Thread(target=rec_infor)
     t_rec_infor.start()
     
-    send_alive()
-    time.sleep(K)
-    
     t_send_alive = RepeatingTimer(K, send_alive)
     t_send_alive.start()
 
+    time.sleep(K)
     t_send_link = RepeatingTimer(K, send_link)
     t_send_link.start()
     
-    time.sleep(Timeout)
+    time.sleep(Timeout-K)
     t_check_dead = RepeatingTimer(Timeout, check_dead)
     t_check_dead.start()
     
