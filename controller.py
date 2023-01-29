@@ -127,8 +127,10 @@ def prompt(msg, msg_name):
 def pretty(d):
     print(json.dumps(d, indent=4, ensure_ascii=False))
 
+ctrl_socket=None
 
 def main():
+    global ctrl_socket
     # Check for number of arguments and exit if host/port not provided
     num_args = len(sys.argv)
     if num_args < 3:
@@ -377,7 +379,18 @@ def main():
         
         while True:
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
-            msg_dict, switch_addr = ctrl_socket.recvfrom(1024)
+            try:
+              global ctrl_socket
+              msg_dict, switch_addr = ctrl_socket.recvfrom(1024)
+            except:
+              
+              ctrl_socket.close()
+              ctrl_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
+              # bind as server
+              ctrl_socket.bind(('', port))
+              print("error!!!!!!!")
+              continue
+              
             msg_dict = msg_dict.decode()
             
             msg_dict=json.loads(msg_dict)
@@ -432,6 +445,6 @@ def main():
     time.sleep(Timeout)
     t_check_dead = RepeatingTimer(Timeout, check_dead)
     t_check_dead.start()
-
+    
 if __name__ == "__main__":
     main()

@@ -371,8 +371,8 @@ def main():
                 self.finished.wait(self.interval)
                 
     #先启动接收
-    # t_rec_infor = threading.Thread(target=rec_infor)
-    # t_rec_infor.start()
+    t_rec_infor = threading.Thread(target=rec_infor)
+    t_rec_infor.start()
     
     t_send_alive = RepeatingTimer(K, send_alive)
     t_send_alive.start()
@@ -384,8 +384,6 @@ def main():
     time.sleep(Timeout-K)
     t_check_dead = RepeatingTimer(Timeout, check_dead)
     t_check_dead.start()
-    
-    rec_infor()
-    
+        
 if __name__ == "__main__":
     main()
