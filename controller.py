@@ -190,6 +190,8 @@ def main():
         socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
     # bind as server
     ctrl_socket.bind(('', port))
+    
+    # ctrl_socket.settimeout(Timeout)
 
     switch_count = 0
     
@@ -372,28 +374,35 @@ def main():
         udp_routing_table_update_sent()
 
     def rec_infor():
+        
         while True:
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
             msg_dict, switch_addr = ctrl_socket.recvfrom(1024)
             msg_dict = msg_dict.decode()
             
-            msg_dict=json.loads(msg_dict.decode())
+            msg_dict=json.loads(msg_dict)
             
+            msg=msg_dict["msg"]
+            addr= msg_dict["addr"]  
+                    
             msg_tmep = msg
             msg = msg.split('\n')
-            
-            lock.acquire()
-            
+                        
             # 可以通过发送地址或信息头来确定信息类别
-            if msg[0] == 'routing_table_update':
+            if addr[1]!=port:
+                ctrl_socket.sendto(msg_tmep.encode(),tuple(addr))
+            elif msg[0] == 'routing_table_update':
+                lock.acquire()
                 prompt(msg_tmep, str(switch_addr)+"rev route update from "+msg[1])
                 refresh_switch_table(msg)
+                lock.release()
             elif msg[0] == "register_request":
+                lock.acquire()
                 req_id = int(msg[1])
                 prompt(msg_tmep, "rev register request from "+req_id)
                 refresh_switch_table(None, req_id, True)
-                
-            lock.release()
+                lock.release()
+                            
 
     def check_dead():
 
