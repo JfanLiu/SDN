@@ -102,7 +102,10 @@ def write_to_log(log):
 def prompt(msg, msg_name):
     print(msg_name+"\n"+msg)
 
-switch_socket=None
+
+switch_socket = None
+
+
 def main():
 
     global LOG_FILE
@@ -135,7 +138,8 @@ def main():
     print("controller port: ", ctrl_port)
     print("f_neighbors: ", f_neighbors)
 
-    switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
+    switch_socket = socket.socket(
+        socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
     # switch as client, connect to controller as server
     host_addr = (ctrl_hostname, ctrl_port)
     # switch_socket.connect(host_addr)
@@ -143,7 +147,7 @@ def main():
     def udp_register_request_sent():
         msg = "register_request "+str(my_id)
         prompt(msg, "send")
-        switch_socket.sendto(msg.encode(),host_addr)
+        switch_socket.sendto(msg.encode(), host_addr)
         register_request_sent()
 
     def udp_register_response_received():
@@ -166,9 +170,13 @@ def main():
                 addr1 = link[1]  # hostname
                 addr2 = int(link[2])  # port
 
+                if end_id in f_neighbors:
+                    continue
+
                 edge_table[end_id] = {
                     "state": True,
                     "is_neighbor": True,
+                    # "is_neighbor": end_id not in f_neighbors,
                     "next_hop": -1,
                     "addr": (addr1, addr2),
                     "refresh": False
@@ -187,7 +195,7 @@ def main():
     udp_register_request_sent()
     # 接收注册请求响应
     udp_register_response_received()
-  
+
     # 接下来，要处理并发，加锁
     lock = threading.Lock()
     # lock_k = threading.Lock()  # 第k秒，接收keep alive的优先级比向ctrl发送table的优先级高
@@ -205,33 +213,32 @@ def main():
             ])
         routing_table.sort(key=lambda x: (x[0], x[1]))
         return routing_table
-      
 
     def send_alive():
         lock.acquire()
-        
+
         def send_alive_thread():
-        # 向除了自己的、活的、邻居发alive
-          msg = "KEEP_ALIVE\n{0}\n".format(my_id)
-          for end_id in edge_table:
-              if end_id == my_id:
-                  continue
-              if not edge_table[end_id]["is_neighbor"]:
-                  continue
-              if not edge_table[end_id]["state"]:
-                  continue
-              addr = edge_table[end_id]["addr"]
-              
-              msg_dict={
-                "msg":msg,
-                "addr":addr
-              }
-              switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
-              prompt(msg, "send keep alive to "+str(end_id))
-           
+            # 向除了自己的、活的、邻居发alive
+            msg = "KEEP_ALIVE\n{0}\n".format(my_id)
+            for end_id in edge_table:
+                if end_id == my_id:
+                    continue
+                if not edge_table[end_id]["is_neighbor"]:
+                    continue
+                if not edge_table[end_id]["state"]:
+                    continue
+                addr = edge_table[end_id]["addr"]
+
+                msg_dict = {
+                    "msg": msg,
+                    "addr": addr
+                }
+                switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
+                prompt(msg, "send keep alive to "+str(end_id))
+
         send_alive_thread()
         lock.release()
-        
+
     def send_link_simple():
       # 向控制器发送自己所有的邻居死活情况
         msg = "routing_table_update\n"
@@ -242,11 +249,11 @@ def main():
             if not edge_table[end_id]["is_neighbor"]:
                 continue
             msg += "{0} {1}\n".format(end_id, edge_table[end_id]["state"])
-          
-        msg_dict={
-                "msg":msg,
-                "addr":host_addr
-              }
+
+        msg_dict = {
+            "msg": msg,
+            "addr": host_addr
+        }
         switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
         prompt(msg, "send route table to ctrl")
 
@@ -330,23 +337,24 @@ def main():
         while True:
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
             try:
-              msg, _ = switch_socket.recvfrom(1024)
+                msg, _ = switch_socket.recvfrom(1024)
             except:
-              switch_socket.close()
-              switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
-              msg_dict={
-                "msg":f"update_addr\n{my_id}\n",
-                "addr":host_addr
-              }
-              switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
-              print("error!!!!!!!")
-              continue
+                switch_socket.close()
+                switch_socket = socket.socket(
+                    socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
+                msg_dict = {
+                    "msg": f"update_addr\n{my_id}\n",
+                    "addr": host_addr
+                }
+                switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
+                print("error!!!!!!!")
+                continue
             msg = msg.decode()
             msg_temp = msg
             msg = msg.split('\n')
-            
+
             lock.acquire()
-            
+
             # 可以通过发送地址或信息头来确定信息类别
             if msg[0] == 'routing_table_update':
                 prompt(msg_temp, "rec route uptate from ctrl")
@@ -355,7 +363,7 @@ def main():
                 prompt(msg_temp, "rec alive from "+str(msg[1]))
                 refresh_edge_table(msg=None, is_init=None,
                                    end_id=int(msg[1]), flag=True)
-            
+
             lock.release()
 
     def check_dead():
@@ -366,8 +374,8 @@ def main():
                 continue
             if not edge_table[end_id]["is_neighbor"]:
                 continue
-            if end_id == my_id:#不查自己
-              continue
+            if end_id == my_id:  # 不查自己
+                continue
             # 若未刷新，则置死
             if edge_table[end_id]["refresh"] != True:
                 neighbor_dead(end_id)
@@ -380,23 +388,24 @@ def main():
     class RepeatingTimer(threading.Timer):
         def run(self):
             while not self.finished.is_set():
-                self.function(*self.args, **self.kwargs)  
+                self.function(*self.args, **self.kwargs)
                 self.finished.wait(self.interval)
-                
-    #先启动接收
+
+    # 先启动接收
     t_rec_infor = threading.Thread(target=rec_infor)
     t_rec_infor.start()
-    
+
     t_send_alive = RepeatingTimer(K, send_alive)
     t_send_alive.start()
 
     time.sleep(K)
     t_send_link = RepeatingTimer(K, send_link)
     t_send_link.start()
-    
+
     time.sleep(Timeout-K)
     t_check_dead = RepeatingTimer(Timeout, check_dead)
     t_check_dead.start()
-        
+
+
 if __name__ == "__main__":
     main()
