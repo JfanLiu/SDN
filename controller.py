@@ -376,11 +376,10 @@ def main():
         udp_routing_table_update_sent()
 
     def rec_infor():
-        
+        global ctrl_socket
         while True:
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
             try:
-              global ctrl_socket
               msg_dict, switch_addr = ctrl_socket.recvfrom(1024)
             except:
               
@@ -404,6 +403,11 @@ def main():
             # 可以通过发送地址或信息头来确定信息类别
             if addr[1]!=port:
                 ctrl_socket.sendto(msg_tmep.encode(),tuple(addr))
+            elif msg[0] == 'update_addr':
+                lock.acquire()
+                switch_table[int(msg[1])]=switch_addr
+                print("here!!!!!",msg[1],switch_addr)
+                lock.release()
             elif msg[0] == 'routing_table_update':
                 lock.acquire()
                 prompt(msg_tmep, str(switch_addr)+"rev route update from "+msg[1])
@@ -425,6 +429,7 @@ def main():
         for start_id in switch_table:
             # 若未刷新，则置死
             if switch_table[start_id]["state"] == True and switch_table[start_id]["refresh"] != True:
+                topology_update_switch_dead(start_id)
                 print("#{0} switch dead".format(start_id))
                 refresh_switch_table(None, start_id, False)#will log
                 

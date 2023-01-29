@@ -102,11 +102,11 @@ def write_to_log(log):
 def prompt(msg, msg_name):
     print(msg_name+"\n"+msg)
 
-
+switch_socket=None
 def main():
 
     global LOG_FILE
-
+    global switch_socket
     # Check for number of arguments and exit if host/port not provided
     num_args = len(sys.argv)
     if num_args < 4:
@@ -136,7 +136,6 @@ def main():
     print("f_neighbors: ", f_neighbors)
 
     switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
-    
     # switch as client, connect to controller as server
     host_addr = (ctrl_hostname, ctrl_port)
     # switch_socket.connect(host_addr)
@@ -188,7 +187,7 @@ def main():
     udp_register_request_sent()
     # 接收注册请求响应
     udp_register_response_received()
-
+  
     # 接下来，要处理并发，加锁
     lock = threading.Lock()
     # lock_k = threading.Lock()  # 第k秒，接收keep alive的优先级比向ctrl发送table的优先级高
@@ -327,9 +326,21 @@ def main():
     udp_routing_table_update_received()
 
     def rec_infor():
+        global switch_socket
         while True:
             # 接收来自邻居交换机的活信息与来自控制器的路由更新表
-            msg, switch_addr = switch_socket.recvfrom(1024)
+            try:
+              msg, _ = switch_socket.recvfrom(1024)
+            except:
+              switch_socket.close()
+              switch_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4,for UDP
+              msg_dict={
+                "msg":f"update_addr\n{my_id}\n",
+                "addr":host_addr
+              }
+              switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
+              print("error!!!!!!!")
+              continue
             msg = msg.decode()
             msg_temp = msg
             msg = msg.split('\n')
@@ -355,11 +366,13 @@ def main():
                 continue
             if not edge_table[end_id]["is_neighbor"]:
                 continue
+            if end_id == my_id:#不查自己
+              continue
             # 若未刷新，则置死
             if edge_table[end_id]["refresh"] != True:
+                neighbor_dead(end_id)
                 refresh_edge_table(msg=None, is_init=None,
                                    end_id=end_id, flag=False)
-                neighbor_dead(end_id)
             edge_table[end_id]["refresh"] = False
         lock.release()
 
