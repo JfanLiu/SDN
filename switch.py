@@ -145,9 +145,14 @@ def main():
     # switch_socket.connect(host_addr)
 
     def udp_register_request_sent():
-        msg = "register_request "+str(my_id)
-        prompt(msg, "send")
-        switch_socket.sendto(msg.encode(), host_addr)
+        msg_dict = {
+          "msg": "register_request",
+          "id":my_id,
+          "f_ls":f_neighbors,
+          "addr": host_addr
+        }
+        prompt(str(msg_dict), "send")
+        switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
         register_request_sent()
 
     def udp_register_response_received():
@@ -248,6 +253,8 @@ def main():
                 continue
             if not edge_table[end_id]["is_neighbor"]:
                 continue
+            if end_id in f_neighbors:
+              continue
             msg += "{0} {1}\n".format(end_id, edge_table[end_id]["state"])
 
         msg_dict = {
@@ -373,6 +380,8 @@ def main():
             if not edge_table[end_id]["state"]:
                 continue
             if not edge_table[end_id]["is_neighbor"]:
+                continue
+            if end_id in f_neighbors:
                 continue
             if end_id == my_id:  # 不查自己
                 continue

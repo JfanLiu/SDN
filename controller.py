@@ -197,21 +197,29 @@ def main():
 
     switch_count = 0
     
-    ls_id=[]
-
     # Loop for waiting for all switches to register
     # Once all switches have registered, send register_response to all switches
     while True:
-        msg, switch_addr = ctrl_socket.recvfrom(1024)
-        msg = msg.decode()
-        prompt(msg, "recv")
-
+        msg_dict, switch_addr = ctrl_socket.recvfrom(1024)
         # Parse the message
-        msg = msg.split()
-        if msg[0] == "register_request":
-            req_id = int(msg[1])
+        msg_dict=json.loads(msg_dict.decode())
+        msg=msg_dict["msg"]
+        req_id= msg_dict["id"]  
+        f_ls=msg_dict["f_ls"] 
+        
+        prompt(f"register_request {req_id}", "recv")
+        if msg == "register_request":
             switch_table[req_id]["addr"] = switch_addr
-            ls_id.append(req_id)
+            if len(f_ls)>0:
+              for end_id in f_ls:
+                switch_table[req_id]["edge"][end_id]["state"]=False
+                switch_table[req_id]["edge"][end_id]["dis"]=9999
+                switch_table[req_id]["edge"][end_id]["next_hop"]=-1
+                
+                switch_table[end_id]["edge"][req_id]["state"]=False
+                switch_table[end_id]["edge"][req_id]["dis"]=9999
+                switch_table[end_id]["edge"][req_id]["next_hop"]=-1
+            
             # print(switch_addr)
             switch_count += 1
             register_request_received(req_id)
@@ -224,7 +232,7 @@ def main():
 
     # register response
     # 广播switch的所有出边与对应地址
-    for switch_id in ls_id:
+    for switch_id in switch_table:
         msg = "register_response\n"
         msg += str(len(switch_table[switch_id]["edge"]))+"\n"
         for end_id in switch_table[switch_id]["edge"]:
@@ -274,7 +282,9 @@ def main():
             # 从current_id出发，更新unvisited表中其出边的最短距离
             for end_id in switch_table[current_id]["edge"]:
                 if not switch_table[end_id]["state"]:
-                    continue  # 若已死，则不入网
+                    continue  # 若点已死，则不入网 #这个条件可以删除，在前面已保证
+                if not switch_table[current_id]["edge"][end_id]["state"]:
+                    continue  # 若边已死，则不入网
                 if end_id in visited:  # 若出点已visit，则不更新
                     continue
                 new_distance = current["dis"] + switch_table[current_id]["edge"][end_id]["dis"]
@@ -314,7 +324,11 @@ def main():
             path = compute_path(switch_id)
             for s_id in switch_table:
                 # 死了可以做出点
-                if not switch_table[s_id]["state"]:
+                if not switch_table[s_id]["state"] :
+                    routing_table.append(
+                        [switch_id, s_id, -1, 9999])
+                elif s_id in switch_table[switch_id]["edge"]\
+                and not switch_table[switch_id]["edge"][s_id]["state"]:
                     routing_table.append(
                         [switch_id, s_id, -1, 9999])
                 else:
@@ -348,7 +362,6 @@ def main():
         if msg != None:
             if msg[0] == 'routing_table_update':
                 start_id = int(msg[1])
-
                 switch_table[start_id]["refresh"] = True
 
                 switch_table_temp = switch_table
