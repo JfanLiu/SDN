@@ -282,7 +282,7 @@ def main():
             # 从current_id出发，更新unvisited表中其出边的最短距离
             for end_id in switch_table[current_id]["edge"]:
                 if not switch_table[end_id]["state"]:
-                    continue  # 若点已死，则不入网 #这个条件可以删除，在前面已保证
+                    continue  # 若点已死，则不入网
                 if not switch_table[current_id]["edge"][end_id]["state"]:
                     continue  # 若边已死，则不入网
                 if end_id in visited:  # 若出点已visit，则不更新
@@ -327,10 +327,7 @@ def main():
                 if not switch_table[s_id]["state"] :
                     routing_table.append(
                         [switch_id, s_id, -1, 9999])
-                elif s_id in switch_table[switch_id]["edge"]\
-                and not switch_table[switch_id]["edge"][s_id]["state"]:
-                    routing_table.append(
-                        [switch_id, s_id, -1, 9999])
+                #出点没死，但是这条边死了
                 else:
                     routing_table.append(
                         [switch_id, s_id, path[s_id]["next_hop"], path[s_id]["dis"]])
@@ -367,6 +364,8 @@ def main():
                 switch_table_temp = switch_table
 
                 for end_id in switch_table[start_id]["edge"]:
+                    if end_id == start_id:
+                      continue
                     switch_table[start_id]["edge"][end_id]["state"] = False
 
                 for i in range(2, len(msg)):
@@ -374,16 +373,21 @@ def main():
                     if len(link) != 2:
                         break
                     end_id = int(link[0])
-                    state = link[1] == True
+                    state = link[1] == "True"
 
                     switch_table[start_id]["edge"][end_id]["state"] = state
 
                 if operator.eq(switch_table, switch_table_temp):
                     return
-        else:
+                
+                print(f"route table changed by {start_id}")
+        
+        else:#仅仅置死、置活一个switch。调用与 check_dead以及后续断线重连
             if switch_table[id]["state"] == flag:
                 return
             switch_table[id]["state"] = flag
+            
+            print(f"route table changed by {id}")
 
         # table有变，刷新，广播，log
         udp_routing_table_update_sent()
@@ -419,7 +423,7 @@ def main():
             elif msg[0] == 'update_addr':
                 lock.acquire()
                 switch_table[int(msg[1])]["addr"]=switch_addr
-                print("here!!!!!",msg[1],switch_addr)
+                print("here!!!!!switch addr change",msg[1],switch_addr)
                 lock.release()
             elif msg[0] == 'routing_table_update':
                 lock.acquire()
