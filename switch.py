@@ -276,12 +276,12 @@ def main():
                 if start_id != my_id:
                     exit(-1)
 
-                edge_table_temp = edge_table
+                # edge_table_temp = edge_table
 
-                # 若不是初始化
-                if not is_init:
-                    for end_id in edge_table:  # 先把所有点置死
-                        edge_table[end_id]["state"] = False
+                # # 若不是初始化
+                # if not is_init:
+                #     for end_id in edge_table:  # 先把所有点置死
+                #         edge_table[end_id]["state"] = False
 
                 for i in range(2, len(msg)):
                     link = msg[i].split()
@@ -301,14 +301,13 @@ def main():
                             }
 
                     edge_table[end_id]["next_hop"] = next_hop
-                    edge_table[end_id]["state"] = True
-                    if end_id not in edge_table_temp:
-                        edge_table[end_id]["refresh"] = False
+                #     if end_id not in edge_table_temp:
+                #         edge_table[end_id]["refresh"] = False
 
-                if not is_init:
-                    # 若不是初始化，如果table无变动，不需要log
-                    if operator.eq(edge_table_temp, edge_table):
-                        return
+                # if not is_init:
+                #     # 若不是初始化，如果table无变动，不需要log
+                #     if operator.eq(edge_table_temp, edge_table):
+                #         return
         else:  # 根据state=flag进行更新
             edge_table[end_id]["refresh"] = True  # 刷新
             if edge_table[end_id]["state"] == flag:  # 若state不变，则退出,不log
