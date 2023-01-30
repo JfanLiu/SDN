@@ -418,7 +418,7 @@ def main():
                 ctrl_socket.sendto(msg_tmep.encode(),tuple(addr))
             elif msg[0] == 'update_addr':
                 lock.acquire()
-                switch_table[int(msg[1])]=switch_addr
+                switch_table[int(msg[1])]["addr"]=switch_addr
                 print("here!!!!!",msg[1],switch_addr)
                 lock.release()
             elif msg[0] == 'routing_table_update':
