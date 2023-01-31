@@ -174,9 +174,8 @@ def main():
                 end_id = int(link[0])
                 addr1 = link[1]  # hostname
                 addr2 = int(link[2])  # port
-
-                if end_id in f_neighbors:
-                    continue
+                
+                #register_response发送的都是邻居
 
                 edge_table[end_id] = {
                     "state": True,
@@ -236,7 +235,8 @@ def main():
 
                 msg_dict = {
                     "msg": msg,
-                    "addr": addr
+                    "addr": addr,#这个地址不能用，仅用来表明要通过ctrl转发
+                    "addr_id": end_id,#用id从控制器获取新地址
                 }
                 switch_socket.sendto(json.dumps(msg_dict).encode(), host_addr)
                 prompt(msg, "send keep alive to "+str(end_id))
@@ -283,6 +283,7 @@ def main():
                 #     for end_id in edge_table:  # 先把所有点置死
                 #         edge_table[end_id]["state"] = False
 
+                #接受所有路由表
                 for i in range(2, len(msg)):
                     link = msg[i].split()
                     if len(link) != 2:
@@ -293,7 +294,7 @@ def main():
                     if is_init:  # 如果是初始化，要对非邻居的点先初始化
                         if end_id not in edge_table:
                             edge_table[end_id] = {
-                                "state": True,
+                                "state": True,#非邻居的死活不重要
                                 "is_neighbor": False,
                                 "next_hop": -1,
                                 # "addr": (addr1, addr2),
@@ -301,6 +302,14 @@ def main():
                             }
 
                     edge_table[end_id]["next_hop"] = next_hop
+                    edge_table[end_id]["is_neighbor"] = next_hop==end_id#-f
+                    
+                    #用next_hop表示这个交换机的死活.对于连通图而言成立
+                    if edge_table[end_id]["state"]==True and next_hop==-1 and edge_table[end_id]["is_neighbor"]:
+                      neighbor_dead(end_id)#对于邻居置死，log dead
+                    edge_table[end_id]["state"] = next_hop!=-1#让重连的图死而复生
+                    
+                    edge_table[end_id]["refresh"] = True#更新路由表时姑且认为刷新了
                 #     if end_id not in edge_table_temp:
                 #         edge_table[end_id]["refresh"] = False
 
@@ -310,9 +319,11 @@ def main():
                 #         return
         else:  # 根据state=flag进行更新
             edge_table[end_id]["refresh"] = True  # 刷新
-            if edge_table[end_id]["state"] == flag:  # 若state不变，则退出,不log
-                return
-            edge_table[end_id]["state"] = flag
+            if edge_table[end_id]["state"] != flag:  
+                #若state改变，由于switch没有计算能力，sendlink，让ctrl来做更新广播
+                edge_table[end_id]["state"] = flag
+                send_link_simple()
+            return# 若state不变，直接退出
 
         if not is_init:  # 如果不是初始化，既要log也要将更新的路由表发送给控制器
             send_link_simple()
@@ -374,9 +385,9 @@ def main():
         # 检测是否所有活邻居都alive刷新了
         lock.acquire()
         for end_id in edge_table:
-            if not edge_table[end_id]["state"]:
-                continue
             if not edge_table[end_id]["is_neighbor"]:
+                continue
+            if not edge_table[end_id]["state"]:
                 continue
             if end_id == my_id:  # 不查自己
                 continue

@@ -406,10 +406,8 @@ def main():
               ctrl_socket.bind(('', port))
               print("error!!!!!!!")
               continue
-              
-            msg_dict = msg_dict.decode()
-            
-            msg_dict=json.loads(msg_dict)
+                      
+            msg_dict=json.loads(msg_dict.decode())
             
             msg=msg_dict["msg"]
             addr= msg_dict["addr"]  
@@ -419,22 +417,64 @@ def main():
                         
             # 可以通过发送地址或信息头来确定信息类别
             if addr[1]!=port:
-                ctrl_socket.sendto(msg_tmep.encode(),tuple(addr))
+                end_id=msg_dict["addr_id"]
+                addr=switch_table[end_id]["addr"]
+                ctrl_socket.sendto(msg_tmep.encode(),addr)
+            elif msg[0] == 'register_request':
+                lock.acquire()
+                msg=msg_dict["msg"]
+                req_id= msg_dict["id"]  
+                f_ls=msg_dict["f_ls"] 
+                if not switch_table[req_id]["state"] :
+                  prompt(f"register_request {req_id}", "recv")
+                  #手动更新除了switch state的信息
+                  switch_table[req_id]["addr"] = switch_addr
+                  switch_table[req_id]["refresh"] = True
+                  for end_id in switch_table[req_id]["edge"]:
+                    switch_table[req_id]["edge"][end_id]["state"]=True
+                    switch_table[end_id]["edge"][req_id]["state"]=True
+                    
+                  if len(f_ls)>0:
+                    for end_id in f_ls:
+                      switch_table[req_id]["edge"][end_id]["state"]=False
+                      switch_table[req_id]["edge"][end_id]["dis"]=9999
+                      switch_table[req_id]["edge"][end_id]["next_hop"]=-1
+                      
+                      switch_table[end_id]["edge"][req_id]["state"]=False
+                      switch_table[end_id]["edge"][req_id]["dis"]=9999
+                      switch_table[end_id]["edge"][req_id]["next_hop"]=-1
+                  
+                  #log
+                  register_request_received(req_id)
+                  
+                  #发送register_response信息
+                  msg = "register_response\n"
+                  switch_id=req_id
+                  msg += str(len(switch_table[switch_id]["edge"]))+"\n"
+                  for end_id in switch_table[switch_id]["edge"]:
+                      msg += "{0} {1} {2}\n".format(end_id,
+                                                    switch_table[end_id]["addr"][0],
+                                                    switch_table[end_id]["addr"][1])
+                  prompt(msg, "send")
+                  ctrl_socket.sendto(msg.encode(), switch_table[switch_id]["addr"])
+                  register_response_sent(switch_id)
+                  
+                  #更新switch的state，广播更新路由表
+                  refresh_switch_table(None, req_id, True)
+                  
+                else:
+                  prompt(f"error register {req_id} again!!!!", "recv")
+                
+                lock.release()
             elif msg[0] == 'update_addr':
                 lock.acquire()
                 switch_table[int(msg[1])]["addr"]=switch_addr
-                print("here!!!!!switch addr change",msg[1],switch_addr)
+                print("here!!!switch addr change",msg[1],switch_addr)
                 lock.release()
             elif msg[0] == 'routing_table_update':
                 lock.acquire()
                 prompt(msg_tmep, str(switch_addr)+"rev route update from "+msg[1])
                 refresh_switch_table(msg)
-                lock.release()
-            elif msg[0] == "register_request":
-                lock.acquire()
-                req_id = int(msg[1])
-                prompt(msg_tmep, "rev register request from "+req_id)
-                refresh_switch_table(None, req_id, True)
                 lock.release()
                             
 
