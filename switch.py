@@ -302,7 +302,7 @@ def main():
                             }
 
                     edge_table[end_id]["next_hop"] = next_hop
-                    edge_table[end_id]["is_neighbor"] = next_hop==end_id#-f
+                    # edge_table[end_id]["is_neighbor"] = next_hop==end_id#-f
                     
                     #用next_hop表示这个交换机的死活.对于连通图而言成立
                     if edge_table[end_id]["state"]==True and next_hop==-1 and edge_table[end_id]["is_neighbor"]:

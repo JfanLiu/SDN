@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "ctrl",
+      "name": "ctrl_6",
       "type": "python",
       "request": "launch",
       "program": "controller.py",
@@ -15,6 +15,19 @@
         //python controller.py 1234 Config\graph_6.txt
         "1234",
         "Config/graph_6.txt"
+      ] 
+    },
+    {
+      "name": "ctrl_7",
+      "type": "python",
+      "request": "launch",
+      "program": "controller.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        //python controller.py 1234 Config\graph_6.txt
+        "1234",
+        "Config/graph_7.txt"
       ] 
     },
     {
@@ -28,8 +41,8 @@
         "0",
         "127.0.0.1",
         "1234",
-        "-f",
-        "1"
+        // "-f",
+        // "1"
       ] 
     },
     {
@@ -99,6 +112,32 @@
         "1234"
       ] 
     },
+    {
+      "name": "switch6",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "6",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
+    {
+      "name": "switch7",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "7",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
   ],
   "compounds": [
     // {
@@ -108,7 +147,17 @@
     // },
     {
       "name": "Server/Client6",
-      "configurations": [ "ctrl","switch0","switch1","switch2","switch3","switch4","switch5"],
+      "configurations": [ "ctrl_6","switch0","switch1","switch2","switch3","switch4","switch5"],
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 2,
+      },
+      "preLaunchTask": "deleteLogFile"
+    },
+    {
+      "name": "Server/Client7",
+      "configurations": [ "ctrl_7","switch1","switch2","switch3","switch4","switch5","switch6","switch7"],
       "presentation": {
         "hidden": false,
         "group": "",
