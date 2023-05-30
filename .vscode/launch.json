@@ -1,0 +1,169 @@
+{
+  // 使用 IntelliSense 了解相关属性。 
+  // 悬停以查看现有属性的描述。
+  // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ctrl_6",
+      "type": "python",
+      "request": "launch",
+      "program": "controller.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        //python controller.py 1234 Config\graph_6.txt
+        "1234",
+        "Config/graph_6.txt"
+      ] 
+    },
+    {
+      "name": "ctrl_7",
+      "type": "python",
+      "request": "launch",
+      "program": "controller.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        //python controller.py 1234 Config\graph_6.txt
+        "1234",
+        "Config/graph_7.txt"
+      ] 
+    },
+    {
+      "name": "switch0",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "0",
+        "127.0.0.1",
+        "1234",
+        // "-f",
+        // "1"
+      ] 
+    },
+    {
+      "name": "switch1",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args":[
+        "1",
+        "127.0.0.1",
+        "1234"
+        // "-f",
+        // "2"
+      ] 
+    },
+    {
+      "name": "switch2",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "2",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
+    {
+      "name": "switch3",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "3",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
+    {
+      "name": "switch4",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "4",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
+    {
+      "name": "switch5",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "5",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
+    {
+      "name": "switch6",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "6",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
+    {
+      "name": "switch7",
+      "type": "python",
+      "request": "launch",
+      "program": "switch.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": [
+        "7",
+        "127.0.0.1",
+        "1234"
+      ] 
+    },
+  ],
+  "compounds": [
+    // {
+    //   "name": "Server/Client3",
+    //   "configurations": [ "ctrl","switch0","switch1","switch2"],
+    //   //"preLaunchTask": "${defaultBuildTask}"
+    // },
+    {
+      "name": "Server/Client6",
+      "configurations": [ "ctrl_6","switch0","switch1","switch2","switch3","switch4","switch5"],
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 2,
+      },
+      "preLaunchTask": "deleteLogFile"
+    },
+    {
+      "name": "Server/Client7",
+      "configurations": [ "ctrl_7","switch1","switch2","switch3","switch4","switch5","switch6","switch7"],
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 1,
+      },
+      "preLaunchTask": "deleteLogFile"
+    }
+  ]
+}
